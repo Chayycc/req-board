@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Prioritization Board : Task</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sarabun:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --paper:#faf9f6; --ink:#191c23; --ink-soft:#5b6472; --line:#e6e5df;
+    --surface:#ffffff; --surface-2:#f2f3f0; --surface-3:#ecedeb;
+    --accent:#2f6df0; --accent-ink:#1a49b0; --accent-soft:#e9f0ff;
+    --copper:#a5702f; --copper-soft:#f6ecdd;
+    --hi:#c0402f; --hi-soft:#fce3e1; --md:#b0761a; --md-soft:#fbefd6; --lo:#6b7482; --lo-soft:#edeff2;
+    --st-todo:#6b7482; --st-prog:#2f6df0; --st-pend:#6b5bd0; --st-done:#2e7d5b; --st-cancel:#c0402f;
+    --p-urgent:#c0402f; --p-high:#7b5bd0; --p-med:#b0761a; --p-low:#6b7482;
+    --font:"Inter","Sarabun",system-ui,-apple-system,"Segoe UI","Noto Sans Thai",sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono","Menlo",monospace;
+    --shadow:0 1px 2px rgba(20,25,40,.05),0 4px 14px rgba(20,25,40,.05);
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --paper:#0e1014; --ink:#eef1f6; --ink-soft:#a7b1c0; --line:#343c49;
+    --surface:#191e26; --surface-2:#242a36; --surface-3:#2f3743;
+    --accent:#6f9dff; --accent-ink:#bcd2ff; --accent-soft:#1c2e4d;
+    --copper:#e0bd8f; --copper-soft:#3a2c17;
+    --hi:#f0806e; --hi-soft:#4a231d; --md:#e0a747; --md-soft:#41310f; --lo:#94a0b1; --lo-soft:#272d38;
+    --st-todo:#94a0b1; --st-prog:#6f9dff; --st-pend:#a99bff; --st-done:#5fd0a2; --st-cancel:#f0806e;
+    --p-urgent:#f0806e; --p-high:#a99bff; --p-med:#e0a747; --p-low:#94a0b1;
+    --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 22px rgba(0,0,0,.45);
+  }}
+  :root[data-theme="dark"]{
+    --paper:#0e1014; --ink:#eef1f6; --ink-soft:#a7b1c0; --line:#343c49;
+    --surface:#191e26; --surface-2:#242a36; --surface-3:#2f3743;
+    --accent:#6f9dff; --accent-ink:#bcd2ff; --accent-soft:#1c2e4d;
+    --copper:#e0bd8f; --copper-soft:#3a2c17;
+    --hi:#f0806e; --hi-soft:#4a231d; --md:#e0a747; --md-soft:#41310f; --lo:#94a0b1; --lo-soft:#272d38;
+    --st-todo:#94a0b1; --st-prog:#6f9dff; --st-pend:#a99bff; --st-done:#5fd0a2; --st-cancel:#f0806e;
+    --p-urgent:#f0806e; --p-high:#a99bff; --p-med:#e0a747; --p-low:#94a0b1;
+    --shadow:0 1px 2px rgba(0,0,0,.35),0 8px 22px rgba(0,0,0,.45);
+  }
+  :root[data-theme="light"]{
+    --paper:#faf9f6; --ink:#191c23; --ink-soft:#5b6472; --line:#e6e5df;
+    --surface:#ffffff; --surface-2:#f2f3f0; --surface-3:#ecedeb;
+    --accent:#2f6df0; --accent-ink:#1a49b0; --accent-soft:#e9f0ff;
+    --copper:#a5702f; --copper-soft:#f6ecdd;
+    --hi:#c0402f; --hi-soft:#fce3e1; --md:#b0761a; --md-soft:#fbefd6; --lo:#6b7482; --lo-soft:#edeff2;
+    --st-todo:#6b7482; --st-prog:#2f6df0; --st-pend:#6b5bd0; --st-done:#2e7d5b; --st-cancel:#c0402f;
+    --p-urgent:#c0402f; --p-high:#7b5bd0; --p-med:#b0761a; --p-low:#6b7482;
+    --shadow:0 1px 2px rgba(20,25,40,.05),0 4px 14px rgba(20,25,40,.05);
+  }
+  *{box-sizing:border-box} body{margin:0;font-family:var(--font);color:var(--ink);background:var(--paper)}
+  .app{min-height:100vh;padding:0 clamp(14px,3vw,32px) 48px;-webkit-font-smoothing:antialiased}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  /* top bar */
+  .bar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0 11px;margin-bottom:4px}
+  .logo{height:40px;width:40px;border-radius:10px;flex:none;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--copper));color:#fff;font-weight:800;font-size:1.05rem;box-shadow:var(--shadow)}
+  .brand{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .brand .kicker{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--copper);font-weight:700}
+  .brand h1{margin:0;font-size:clamp(1.02rem,.9rem+.7vw,1.4rem);font-weight:800;letter-spacing:-.02em}
+  .spacer{flex:1 1 auto}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+  .seg button{font:inherit;font-size:.82rem;font-weight:600;border:0;background:transparent;color:var(--ink-soft);padding:6px 12px;border-radius:7px;cursor:pointer;transition:.15s}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .ghost{font:inherit;font-size:.8rem;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);padding:7px 11px;border-radius:9px;cursor:pointer;transition:.15s}
+  .ghost:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .ghost.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+  .icon{width:38px;height:36px;display:grid;place-items:center;padding:0;font-size:1rem}
+  select.ghost{padding:7px 9px;max-width:180px}
+  .search{font:inherit;font-size:.84rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:7px 11px;width:190px}
+  .search:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+  .synctag{font-family:var(--mono);font-size:.66rem;font-weight:700;padding:3px 9px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+  .synctag.ok{color:var(--st-done);border-color:color-mix(in srgb,var(--st-done) 40%,transparent)}
+  .synctag.err{color:var(--hi);border-color:color-mix(in srgb,var(--hi) 40%,transparent)}
+  .synctag.sync{color:var(--ink-soft)}
+  /* filter row */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 0 4px}
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:12px 0 6px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 15px;box-shadow:var(--shadow)}
+  .kpi .lab{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:700;margin-bottom:5px}
+  .kpi .val{font-family:var(--mono);font-size:1.7rem;font-weight:800;line-height:.95;font-variant-numeric:tabular-nums}
+  .kpi.q .val{color:var(--copper)} .kpi.a .val{color:var(--accent-ink)} .kpi.o .val{color:var(--hi)} .kpi.d .val{color:var(--st-done)}
+  .kpi .sub{font-size:.7rem;color:var(--ink-soft);margin-top:3px}
+  /* section label */
+  .zone{padding:16px 0 2px}
+  .zlab{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+  .zlab .ic{font-size:1rem}
+  .zlab h2{margin:0;font-size:1.02rem;font-weight:800;letter-spacing:-.01em}
+  .zlab .cnt{font-family:var(--mono);font-size:.72rem;font-weight:700;color:var(--copper);background:var(--copper-soft);border-radius:99px;padding:2px 10px}
+  .zlab .hint{font-size:.72rem;color:var(--ink-soft)}
+  /* Queue */
+  .queue{border:1.5px dashed color-mix(in srgb,var(--copper) 45%,var(--line));background:color-mix(in srgb,var(--copper-soft) 45%,transparent);border-radius:16px;padding:14px}
+  .qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+  .qcard{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 14px;box-shadow:var(--shadow);transition:transform .12s,box-shadow .12s}
+  .qcard:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(20,25,40,.06),0 10px 22px rgba(20,25,40,.1)}
+  .qcard .qtop{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+  .qcard .qname{font-size:.9rem;font-weight:700;line-height:1.25;cursor:pointer}
+  .qcard .qtype{font-size:.74rem;color:var(--ink-soft);margin:3px 0 9px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .qcard .qmeta{display:flex;flex-wrap:wrap;gap:5px 8px;font-size:.7rem;color:var(--ink-soft);margin-bottom:10px}
+  .qacc{display:flex;gap:6px;align-items:center}
+  .qacc select{flex:1;font:inherit;font-size:.76rem;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 7px;min-width:0}
+  .acceptbtn{font:inherit;font-size:.76rem;font-weight:700;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;white-space:nowrap}
+  .acceptbtn:hover{filter:brightness(1.06)}
+  .qempty{font-size:.8rem;color:var(--ink-soft);text-align:center;padding:22px}
+  /* Kanban */
+  .board-wrap{overflow-x:auto;padding-bottom:8px}
+  .board{display:flex;gap:14px;min-width:min-content;align-items:flex-start}
+  .col{flex:0 0 270px;display:flex;flex-direction:column;background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:12px;transition:background .15s,box-shadow .15s}
+  .col.drop{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+  .col-h{display:flex;align-items:center;gap:8px;margin:2px 4px 12px}
+  .dot{width:9px;height:9px;border-radius:99px;flex:none}
+  .col-h .t{font-weight:800;font-size:.86rem}
+  .col-h .c{font-family:var(--mono);font-size:.72rem;font-weight:700;color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:1px 8px}
+  .stack{display:flex;flex-direction:column;gap:10px;min-height:44px}
+  .tcard{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 12px 11px 15px;box-shadow:var(--shadow);cursor:grab;transition:transform .12s,box-shadow .12s,opacity .12s}
+  .tcard:hover{transform:translateY(-1px);box-shadow:0 2px 4px rgba(20,25,40,.06),0 8px 20px rgba(20,25,40,.09)}
+  .tcard.dragging{opacity:.4}
+  .tcard .stripe{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:12px 0 0 12px}
+  .tcard .top{display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap}
+  .ptag{display:inline-flex;align-items:center;gap:5px;font-size:.64rem;font-weight:700;color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--line);border-radius:99px;padding:2px 8px 2px 6px}
+  .ptag .pd{width:7px;height:7px;border-radius:99px}
+  .cat{font-size:.6rem;font-weight:800;border-radius:99px;padding:2px 7px;white-space:nowrap}
+  .cat.req{color:var(--accent-ink);background:var(--accent-soft)}
+  .cat.iss{color:var(--copper);background:var(--copper-soft)}
+  .tcard .ttl{font-size:.84rem;font-weight:600;line-height:1.3;margin:0 0 4px;cursor:pointer}
+  .tcard .sub{font-size:.72rem;color:var(--ink-soft);margin:0 0 9px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .tcard .foot{display:flex;align-items:center;gap:8px}
+  .av{width:22px;height:22px;border-radius:99px;display:grid;place-items:center;font-size:.64rem;font-weight:800;color:#fff;flex:none}
+  .who{font-size:.72rem;color:var(--ink-soft);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .due{font-family:var(--mono);font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap;background:var(--surface-2);color:var(--ink-soft)}
+  .due.over{color:#fff;background:var(--hi)} .due.soon{color:var(--md);background:var(--md-soft)}
+  .empty{font-size:.74rem;color:var(--ink-soft);text-align:center;padding:14px 6px;border:1px dashed var(--line);border-radius:10px}
+  /* drawer */
+  .scrim{position:fixed;inset:0;background:rgba(15,17,21,.32);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(440px,95vw);background:var(--surface);border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(0,0,0,.15);z-index:50;transform:translateX(100%);transition:transform .24s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;overflow:hidden}
+  .drawer.open{transform:translateX(0)}
+  .dw-h{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line)}
+  .dw-h .did{font-family:var(--mono);font-size:.7rem;color:var(--ink-soft);word-break:break-all}
+  .dw-h .close{margin-left:auto;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);cursor:pointer;font-size:1rem;flex:none}
+  .dw-h .close:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .dw-body{padding:16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+  .fld{display:flex;flex-direction:column;gap:5px}
+  .fld label{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--ink-soft)}
+  .fld input,.fld select,.fld textarea{font:inherit;font-size:.86rem;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;width:100%}
+  .fld input:focus,.fld select:focus,.fld textarea:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+  .fld input[readonly]{opacity:.65}
+  .fld textarea{resize:vertical;min-height:60px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .ro{font-size:.86rem;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;white-space:pre-wrap;word-break:break-word}
+  .lk{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--accent-ink);text-decoration:none;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:9px;padding:8px 11px;word-break:break-all}
+  .lk.off{opacity:.4;pointer-events:none}
+  .divlab{font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:800;border-top:1px solid var(--line);padding-top:12px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);font-size:.8rem;font-weight:600;padding:9px 16px;border-radius:99px;opacity:0;pointer-events:none;transition:.25s;z-index:60}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  @media(max-width:560px){.search{width:140px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="logo">✓</div>
+    <div class="brand"><span class="kicker">Request Queue</span><h1>Prioritization Board : Task</h1></div>
+    <div class="spacer"></div>
+    <input id="search" class="search" type="search" placeholder="ค้นหา ชื่อ/เรื่อง/แผนก…" aria-label="ค้นหา"/>
+    <div class="seg" role="tablist" aria-label="มุมมอง Kanban">
+      <button id="v-status" aria-pressed="true">Status</button>
+      <button id="v-prio" aria-pressed="false">Priority</button>
+    </div>
+    <span id="synctag" class="synctag sync">…</span>
+    <button id="refresh" class="ghost" title="ดึงงานใหม่จาก Notion export (merge)">↻ Sync</button>
+    <button id="theme" class="ghost icon" title="สลับธีม" aria-label="สลับธีม">◑</button>
+  </header>
+
+  <div class="filters">
+    <select id="f-cat" class="ghost" aria-label="ประเภท request"></select>
+    <select id="f-prio" class="ghost" aria-label="Priority"></select>
+    <select id="f-dept" class="ghost" aria-label="แผนก"></select>
+    <select id="f-company" class="ghost" aria-label="เครือบริษัท"></select>
+    <select id="f-owner" class="ghost" aria-label="ผู้รับผิดชอบ"></select>
+    <button id="f-done" class="ghost" title="แสดง/ซ่อน Done &amp; Cancel">แสดง Done/Cancel</button>
+    <button id="f-clear" class="ghost">ล้างตัวกรอง</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section class="zone">
+    <div class="zlab"><span class="ic">📥</span><h2>Task Queue — งานเข้าใหม่ (ยังไม่รับ)</h2><span class="cnt" id="q-cnt">0</span><span class="hint">คนขอ req เข้ามาจะมากองที่นี่ · กด “รับงาน” เพื่อย้ายลงบอร์ด</span></div>
+    <div class="queue"><div class="qgrid" id="queue"></div></div>
+  </section>
+
+  <section class="zone">
+    <div class="zlab"><span class="ic">🗂️</span><h2>งานที่รับแล้ว</h2><span class="hint" id="board-hint">แบ่งตาม Status · ลากการ์ดข้ามคอลัมน์เพื่อเปลี่ยนสถานะ</span></div>
+    <div class="board-wrap"><div class="board" id="board"></div></div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="รายละเอียดงาน">
+  <div class="dw-h"><span class="did" id="dw-id">—</span><button class="close" id="dw-close" aria-label="ปิด">✕</button></div>
+  <div class="dw-body" id="dw-body"></div>
+</aside>
+<div class="toast" id="toast"></div>
+
+<script src="data.js"></script>
+<script>
+(function(){
+  "use strict";
+  /* ---------- config ---------- */
+  const SB_URL="https://rticsujbdozqmjyiohvm.supabase.co";
+  const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0aWNzdWpiZG96cW1qeWlvaHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTg0NzksImV4cCI6MjEwMDQ3NDQ3OX0.sXpsoHkXh8Exwb4Ep2H25PuVLNrw7GUlJNcnyzPb6hk";
+  const SB_HEAD={apikey:SB_KEY,Authorization:"Bearer "+SB_KEY,"Content-Type":"application/json"};
+  const BOARD_ID="req";
+  const TKEY="em_req_theme";
+  const OWNERS=["Shay","Tar","Ohm","Toto","Fahsai","Mew","Sine","Bow","Ploy","Ako"];
+  const STATUS=["Not started","Pending","In progress","Done","Cancel"];
+  const KANBAN=["Pending","In progress","Done","Cancel"];
+  const PRIOS=["Urgent","High","Medium","Low"];
+  const CATS=["Data Request","Data Issue"];
+  const AV=["#2f6df0","#a5702f","#1f8f80","#6b5bd0","#c0402f","#2e7d5b","#b0761a","#0e7490","#9a3412","#5b6472"];
+  const statColor=s=>({"Not started":"--st-todo","Pending":"--st-pend","In progress":"--st-prog","Done":"--st-done","Cancel":"--st-cancel"}[s]||"--st-todo");
+  const prioColor=p=>({"Urgent":"--p-urgent","High":"--p-high","Medium":"--p-med","Low":"--p-low"}[p]||"--lo");
+  const prioRank=p=>({"Urgent":0,"High":1,"Medium":2,"Low":3}[p]??9);
+
+  /* ---------- state ---------- */
+  let reqs=[];
+  let view="status";
+  let showDone=false;
+  const filt={cat:"",prio:"",dept:"",company:"",owner:"",q:""};
+  let lastSeen=null, sbOK=false, pushTimer=null, skipPush=false;
+
+  const $=s=>document.querySelector(s);
+  const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const avColor=n=>AV[Math.abs([...String(n)].reduce((a,c)=>a+c.charCodeAt(0),0))%AV.length];
+  const initials=n=>{n=String(n||"?").trim();return n?n.slice(0,2).toUpperCase():"?";};
+
+  function dueMeta(o){
+    if(o.status==="Done"||o.status==="Cancel")return{cls:"",txt:o.completed?"✓ "+fmtD(o.completed):""};
+    if(!o.deadline)return{cls:"",txt:""};
+    const e=new Date(o.deadline);if(isNaN(e))return{cls:"",txt:""};
+    const now=new Date();now.setHours(0,0,0,0);
+    const left=Math.round((e-now)/864e5);
+    if(left<0)return{cls:"over",txt:"เลย "+(-left)+"ว"};
+    if(left<=3)return{cls:"soon",txt:left+"ว"};
+    return{cls:"",txt:fmtD(o.deadline)};
+  }
+  function fmtD(d){if(!d)return"";const x=new Date(d);if(isNaN(x))return d;return x.getDate()+"/"+(x.getMonth()+1);}
+
+  /* ---------- seed + merge ---------- */
+  function normalize(list){
+    return list.map(o=>({
+      id:o.id,url:o.url||"",name:o.name||"(ไม่ระบุชื่อ)",
+      status:STATUS.indexOf(o.status)>=0?o.status:"Not started",
+      prio:PRIOS.indexOf(o.prio)>=0?o.prio:"",
+      type:o.type||"",dept:o.dept||"",deptShort:o.deptShort||"",company:o.company||"",
+      output:o.output||"",title:o.title||o.desc||"(ไม่มีหัวข้อ)",desc:o.desc||"",note:o.note||"",
+      worklink:o.worklink||"",formlink:o.formlink||"",
+      category:CATS.indexOf(o.category)>=0?o.category:"Data Request",
+      deadline:o.deadline||"",submitted:o.submitted||"",completed:o.completed||"",created:o.created||"",
+      owner:o.owner||""
+    }));
+  }
+  // merge fresh seed into current: add new ids, keep edited fields (status/owner) on existing
+  function mergeSeed(cur){
+    const seed=normalize(window.REQ_SEED||[]);
+    const byId={}; cur.forEach(r=>byId[r.id]=r);
+    let added=0;
+    seed.forEach(s=>{
+      if(!byId[s.id]){byId[s.id]=s;added++;}
+      else{ // refresh source-of-truth fields from Notion, keep board edits
+        const e=byId[s.id];
+        ["name","type","dept","deptShort","company","output","title","desc","worklink","formlink","category","deadline","submitted","url"].forEach(k=>{if(s[k])e[k]=s[k];});
+        if(!e.owner&&s.owner)e.owner=s.owner;
+      }
+    });
+    return {list:Object.values(byId),added};
+  }
+
+  /* ---------- supabase ---------- */
+  function setSync(s){const el=$("#synctag");el.className="synctag "+s;el.textContent=s==="ok"?"● synced":s==="err"?"● offline":"syncing…";}
+  async function sbLoad(){const r=await fetch(SB_URL+"/rest/v1/board?id=eq."+BOARD_ID+"&select=data,updated_at",{headers:SB_HEAD});if(!r.ok)throw new Error("load "+r.status);const rows=await r.json();return rows[0]||null;}
+  async function sbSave(){
+    if(skipPush){skipPush=false;return;}
+    try{
+      const body=[{id:BOARD_ID,data:{reqs},updated_at:new Date().toISOString()}];
+      const r=await fetch(SB_URL+"/rest/v1/board?on_conflict=id",{method:"POST",headers:Object.assign({},SB_HEAD,{Prefer:"resolution=merge-duplicates,return=representation"}),body:JSON.stringify(body)});
+      if(!r.ok)throw new Error("save "+r.status);
+      const rows=await r.json();if(rows&&rows[0])lastSeen=rows[0].updated_at;
+      sbOK=true;setSync("ok");
+    }catch(e){sbOK=false;setSync("err");}
+  }
+  function queueSave(){clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,500);toast("บันทึกแล้ว");}
+  function adopt(row){if(!row||!row.data||!Array.isArray(row.data.reqs))return false;reqs=normalize(row.data.reqs);lastSeen=row.updated_at;return true;}
+
+  async function boot(){
+    setSync("sync");
+    let loaded=false;
+    try{const row=await sbLoad();if(row&&adopt(row))loaded=true;sbOK=true;}catch(e){sbOK=false;}
+    if(!loaded){reqs=normalize(window.REQ_SEED||[]);}
+    // always merge any new seed rows (new Notion requests) without clobbering edits
+    const m=mergeSeed(reqs);reqs=m.list;
+    setSync(sbOK?"ok":"err");
+    buildFilters();render();
+    if(sbOK){skipPush=true;await sbSave();skipPush=false;if(!loaded||m.added){await sbSave();}}
+    // poll for remote changes
+    setInterval(async()=>{try{const r=await sbLoad();if(r&&r.updated_at&&r.updated_at!==lastSeen){adopt(r);render();}}catch(e){}},15000);
+  }
+
+  /* ---------- filters ---------- */
+  function opt(arr,cur,ph){return `<option value="">${ph}</option>`+arr.map(v=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(v)}</option>`).join("");}
+  function buildFilters(){
+    const depts=[...new Set(reqs.map(r=>r.deptShort).filter(Boolean))].sort();
+    const comps=[...new Set(reqs.map(r=>r.company).filter(Boolean))].sort();
+    $("#f-cat").innerHTML=opt(CATS,filt.cat,"ทุกประเภท");
+    $("#f-prio").innerHTML=opt(PRIOS,filt.prio,"ทุก Priority");
+    $("#f-dept").innerHTML=opt(depts,filt.dept,"ทุกแผนก");
+    $("#f-company").innerHTML=opt(comps,filt.company,"ทุกเครือ");
+    $("#f-owner").innerHTML=opt(OWNERS,filt.owner,"ทุก Owner");
+  }
+  function match(r){
+    if(filt.cat&&r.category!==filt.cat)return false;
+    if(filt.prio&&r.prio!==filt.prio)return false;
+    if(filt.dept&&r.deptShort!==filt.dept)return false;
+    if(filt.company&&r.company!==filt.company)return false;
+    if(filt.owner&&r.owner!==filt.owner)return false;
+    if(filt.q){const q=filt.q.toLowerCase();const hay=(r.name+" "+r.title+" "+r.desc+" "+r.dept+" "+r.type).toLowerCase();if(hay.indexOf(q)<0)return false;}
+    return true;
+  }
+
+  /* ---------- render ---------- */
+  function render(){renderKpis();renderQueue();renderBoard();}
+
+  function renderKpis(){
+    const all=reqs.filter(match);
+    const queue=all.filter(r=>r.status==="Not started");
+    const active=all.filter(r=>r.status==="Pending"||r.status==="In progress");
+    const now=new Date();now.setHours(0,0,0,0);
+    const overdue=all.filter(r=>r.status!=="Done"&&r.status!=="Cancel"&&r.deadline&&new Date(r.deadline)<now);
+    const done=all.filter(r=>r.status==="Done");
+    $("#kpis").innerHTML=`
+      <div class="kpi q"><div class="lab">Queue · ยังไม่รับ</div><div class="val">${queue.length}</div><div class="sub">งานเข้าใหม่รอรับ</div></div>
+      <div class="kpi a"><div class="lab">กำลังทำ</div><div class="val">${active.length}</div><div class="sub">Pending + In progress</div></div>
+      <div class="kpi o"><div class="lab">เลยกำหนด</div><div class="val">${overdue.length}</div><div class="sub">ยังไม่เสร็จ · overdue</div></div>
+      <div class="kpi d"><div class="lab">เสร็จแล้ว</div><div class="val">${done.length}</div><div class="sub">Done ทั้งหมด</div></div>`;
+  }
+
+  function renderQueue(){
+    const items=reqs.filter(r=>r.status==="Not started"&&match(r))
+      .sort((a,b)=>prioRank(a.prio)-prioRank(b.prio)||(b.submitted||"").localeCompare(a.submitted||""));
+    $("#q-cnt").textContent=items.length;
+    const box=$("#queue");
+    if(!items.length){box.parentElement.innerHTML='<div class="qempty">— ไม่มีงานใหม่รอรับ —</div>';return;}
+    box.parentElement.innerHTML='<div class="qgrid" id="queue"></div>';
+    const g=$("#queue");
+    g.innerHTML=items.map(r=>{
+      const pc=prioColor(r.prio),d=dueMeta(r);
+      return `<div class="qcard" data-id="${esc(r.id)}">
+        <div class="qtop">
+          ${r.prio?`<span class="ptag"><span class="pd" style="background:var(${pc})"></span>${esc(r.prio)}</span>`:""}
+          <span class="cat ${r.category==="Data Issue"?"iss":"req"}">${r.category==="Data Issue"?"Issue":"Request"}</span>
+          ${d.txt?`<span class="due ${d.cls}" style="margin-left:auto">${esc(d.txt)}</span>`:""}
+        </div>
+        <div class="qname" data-open="${esc(r.id)}">${esc(r.name)}</div>
+        <div class="qtype">${esc(r.title)}</div>
+        <div class="qmeta">
+          ${r.deptShort?`<span>🏢 ${esc(r.deptShort)}</span>`:""}
+          ${r.company?`<span>· ${esc(r.company)}</span>`:""}
+          ${r.type?`<span>· ${esc(r.type)}</span>`:""}
+        </div>
+        <div class="qacc">
+          <select class="q-owner" aria-label="เลือกผู้รับ">${["<option value=''>เลือกผู้รับ…</option>",...OWNERS.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`)].join("")}</select>
+          <button class="acceptbtn" data-acc="${esc(r.id)}">รับงาน →</button>
+        </div>
+      </div>`;
+    }).join("");
+    g.querySelectorAll("[data-open]").forEach(el=>el.addEventListener("click",()=>openDrawer(el.dataset.open)));
+    g.querySelectorAll("[data-acc]").forEach(btn=>btn.addEventListener("click",()=>{
+      const card=btn.closest(".qcard");const owner=card.querySelector(".q-owner").value;
+      accept(btn.dataset.acc,owner);
+    }));
+  }
+
+  function accept(id,owner){
+    const r=reqs.find(x=>x.id===id);if(!r)return;
+    r.owner=owner||r.owner||"";
+    r.status="In progress";
+    render();queueSave();
+    toast("รับงานแล้ว → In progress");
+  }
+
+  function card(r){
+    const pc=prioColor(r.prio),sc=statColor(r.status),d=dueMeta(r);
+    return `<div class="tcard" draggable="true" data-id="${esc(r.id)}">
+      <span class="stripe" style="background:var(${pc})"></span>
+      <div class="top">
+        ${r.prio?`<span class="ptag"><span class="pd" style="background:var(${pc})"></span>${esc(r.prio)}</span>`:""}
+        <span class="cat ${r.category==="Data Issue"?"iss":"req"}">${r.category==="Data Issue"?"Issue":"Req"}</span>
+        ${view==="prio"?`<span class="ptag" style="margin-left:auto;color:var(${sc})">${esc(r.status)}</span>`:""}
+      </div>
+      <div class="ttl" data-open="${esc(r.id)}">${esc(r.name)}</div>
+      <div class="sub">${esc(r.title)}</div>
+      <div class="foot">
+        ${r.owner?`<span class="av" style="background:${avColor(r.owner)}">${esc(initials(r.owner))}</span>`:`<span class="av" style="background:var(--surface-3);color:var(--ink-soft)">–</span>`}
+        <span class="who">${esc(r.owner||r.deptShort||"—")}</span>
+        ${d.txt?`<span class="due ${d.cls}">${esc(d.txt)}</span>`:""}
+      </div>
+    </div>`;
+  }
+
+  function renderBoard(){
+    const base=reqs.filter(r=>r.status!=="Not started"&&match(r));
+    let cols;
+    if(view==="prio"){
+      cols=PRIOS.map(k=>({k,label:k,color:prioColor(k),items:base.filter(r=>r.prio===k)}));
+      // items with no prio -> extra column
+      const none=base.filter(r=>!r.prio);
+      if(none.length)cols.push({k:"",label:"ไม่ระบุ",color:"--lo",items:none});
+    }else{
+      let ks=KANBAN.slice();
+      if(!showDone)ks=ks.filter(k=>k!=="Done"&&k!=="Cancel");
+      cols=ks.map(k=>({k,label:k,color:statColor(k),items:base.filter(r=>r.status===k)}));
+    }
+    $("#board").innerHTML=cols.map(c=>{
+      const sorted=c.items.slice().sort((a,b)=>prioRank(a.prio)-prioRank(b.prio)||(a.deadline||"9999").localeCompare(b.deadline||"9999"));
+      return `<div class="col" data-col="${esc(c.k)}">
+        <div class="col-h"><span class="dot" style="background:var(${c.color})"></span><span class="t">${esc(c.label)}</span><span class="c">${c.items.length}</span></div>
+        <div class="stack">${sorted.map(card).join("")||'<div class="empty">— ว่าง —</div>'}</div>
+      </div>`;
+    }).join("");
+    wireCards();
+  }
+
+  function wireCards(){
+    document.querySelectorAll(".tcard [data-open]").forEach(el=>el.addEventListener("click",e=>{e.stopPropagation();openDrawer(el.dataset.open);}));
+    document.querySelectorAll(".tcard").forEach(cd=>{
+      cd.addEventListener("click",e=>{if(!e.target.closest("[data-open]"))openDrawer(cd.dataset.id);});
+      cd.addEventListener("dragstart",e=>{cd.classList.add("dragging");e.dataTransfer.setData("text/plain",cd.dataset.id);e.dataTransfer.effectAllowed="move";});
+      cd.addEventListener("dragend",()=>cd.classList.remove("dragging"));
+    });
+    document.querySelectorAll(".col").forEach(col=>{
+      col.addEventListener("dragover",e=>{e.preventDefault();col.classList.add("drop");});
+      col.addEventListener("dragleave",()=>col.classList.remove("drop"));
+      col.addEventListener("drop",e=>{
+        e.preventDefault();col.classList.remove("drop");
+        const id=e.dataTransfer.getData("text/plain");const r=reqs.find(x=>x.id===id);if(!r)return;
+        const key=col.dataset.col;
+        if(view==="prio"){r.prio=key;}else{r.status=key;}
+        render();queueSave();
+      });
+    });
+  }
+
+  /* ---------- drawer ---------- */
+  function openDrawer(id){
+    const r=reqs.find(x=>x.id===id);if(!r)return;
+    $("#dw-id").textContent=r.category+" · "+(r.deptShort||"—");
+    const sel=(arr,cur)=>arr.map(v=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(v)}</option>`).join("");
+    const ownerOpts=`<option value=""${!r.owner?" selected":""}>— ยังไม่กำหนด —</option>`+sel(OWNERS,r.owner);
+    const notionUrl="https://www.notion.so/"+r.id;
+    $("#dw-body").innerHTML=`
+      <div class="fld"><label>ผู้ขอ (Request by)</label><div class="ro">${esc(r.name)}</div></div>
+      <div class="fld"><label>เรื่อง / หัวข้อ</label><div class="ro">${esc(r.title)}</div></div>
+      ${r.desc&&r.desc!==r.title?`<div class="fld"><label>รายละเอียด</label><div class="ro">${esc(r.desc)}</div></div>`:""}
+      <div class="grid2">
+        <div class="fld"><label>Status</label><select id="d-status">${sel(STATUS,r.status)}</select></div>
+        <div class="fld"><label>Priority</label><select id="d-prio">${sel(["",...PRIOS],r.prio)}</select></div>
+      </div>
+      <div class="grid2">
+        <div class="fld"><label>ผู้รับผิดชอบ</label><select id="d-owner">${ownerOpts}</select></div>
+        <div class="fld"><label>Deadline</label><input id="d-deadline" type="date" value="${esc(r.deadline)}"/></div>
+      </div>
+      <div class="fld"><label>Note (ภายในทีม)</label><textarea id="d-note" placeholder="บันทึกความคืบหน้า…">${esc(r.note)}</textarea></div>
+      <div class="divlab">ข้อมูลจาก request</div>
+      <div class="grid2">
+        <div class="fld"><label>แผนก</label><div class="ro">${esc(r.dept||"—")}</div></div>
+        <div class="fld"><label>เครือบริษัท</label><div class="ro">${esc(r.company||"—")}</div></div>
+      </div>
+      <div class="grid2">
+        <div class="fld"><label>ประเภทงาน</label><div class="ro">${esc(r.type||"—")}</div></div>
+        <div class="fld"><label>Output</label><div class="ro">${esc(r.output||"—")}</div></div>
+      </div>
+      <div class="grid2">
+        <div class="fld"><label>วันที่ขอ</label><div class="ro">${esc(r.submitted||"—")}</div></div>
+        <div class="fld"><label>วันเสร็จ</label><div class="ro">${esc(r.completed||"—")}</div></div>
+      </div>
+      <div class="divlab">ลิงก์</div>
+      <a class="lk ${r.worklink?"":"off"}" href="${esc(r.worklink)}" target="_blank" rel="noopener">📄 ไฟล์งานที่ทำ</a>
+      <a class="lk ${r.formlink?"":"off"}" href="${esc(r.formlink)}" target="_blank" rel="noopener">📎 ไฟล์แนบจาก request form</a>
+      <a class="lk" href="${esc(notionUrl)}" target="_blank" rel="noopener">↗ เปิดใน Notion (ต้นฉบับ)</a>`;
+    const bind=(s,f)=>{const el=$(s);el&&el.addEventListener("change",e=>{f(e.target.value);render();queueSave();});};
+    bind("#d-status",v=>r.status=v);
+    bind("#d-prio",v=>r.prio=v);
+    bind("#d-owner",v=>r.owner=v);
+    bind("#d-deadline",v=>r.deadline=v);
+    const nt=$("#d-note");nt&&nt.addEventListener("input",e=>{r.note=e.target.value;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,700);});
+    $("#scrim").classList.add("show");$("#drawer").classList.add("open");
+  }
+  function closeDrawer(){$("#scrim").classList.remove("show");$("#drawer").classList.remove("open");}
+
+  /* ---------- misc ---------- */
+  let toastT=null;
+  function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),1400);}
+
+  function setView(v){view=v;$("#v-status").setAttribute("aria-pressed",v==="status");$("#v-prio").setAttribute("aria-pressed",v==="prio");$("#board-hint").textContent=v==="prio"?"แบ่งตาม Priority · ลากการ์ดเพื่อเปลี่ยนความสำคัญ":"แบ่งตาม Status · ลากการ์ดข้ามคอลัมน์เพื่อเปลี่ยนสถานะ";render();}
+
+  /* ---------- events ---------- */
+  $("#v-status").addEventListener("click",()=>setView("status"));
+  $("#v-prio").addEventListener("click",()=>setView("prio"));
+  $("#dw-close").addEventListener("click",closeDrawer);
+  $("#scrim").addEventListener("click",closeDrawer);
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
+  $("#f-cat").addEventListener("change",e=>{filt.cat=e.target.value;render();});
+  $("#f-prio").addEventListener("change",e=>{filt.prio=e.target.value;render();});
+  $("#f-dept").addEventListener("change",e=>{filt.dept=e.target.value;render();});
+  $("#f-company").addEventListener("change",e=>{filt.company=e.target.value;render();});
+  $("#f-owner").addEventListener("change",e=>{filt.owner=e.target.value;render();});
+  $("#search").addEventListener("input",e=>{filt.q=e.target.value.trim();render();});
+  $("#f-done").addEventListener("click",()=>{showDone=!showDone;$("#f-done").classList.toggle("on",showDone);$("#f-done").textContent=showDone?"ซ่อน Done/Cancel":"แสดง Done/Cancel";render();});
+  $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.q="";$("#search").value="";buildFilters();render();});
+  $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs);reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
+  const curDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
+  $("#theme").addEventListener("click",()=>{const nv=curDark()?"light":"dark";document.documentElement.dataset.theme=nv;try{localStorage.setItem(TKEY,nv);}catch(e){}});
+  try{const t=localStorage.getItem(TKEY);if(t)document.documentElement.dataset.theme=t;}catch(e){}
+
+  boot();
+})();
+</script>
+</body>
+</html>
