@@ -164,6 +164,31 @@
   .divlab{font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:800;border-top:1px solid var(--line);padding-top:12px}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);font-size:.8rem;font-weight:600;padding:9px 16px;border-radius:99px;opacity:0;pointer-events:none;transition:.25s;z-index:60}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+  .seg button{font:inherit;font-size:.82rem;font-weight:700;border:0;background:transparent;color:var(--ink-soft);padding:6px 13px;border-radius:7px;cursor:pointer;transition:.15s}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  #view-planning[hidden]{display:none}
+  .plan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin-top:6px}
+  .ocard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:15px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px}
+  .ocard.unassigned{border-style:dashed;background:color-mix(in srgb,var(--md-soft) 30%,var(--surface))}
+  .oc-h{display:flex;align-items:center;gap:10px}
+  .oc-h .av{width:34px;height:34px;border-radius:99px;font-size:.82rem}
+  .oc-h .nm{font-weight:800;font-size:.98rem}
+  .oc-h .big{margin-left:auto;text-align:right}
+  .oc-h .big b{font-family:var(--mono);font-size:1.5rem;font-weight:800;line-height:.9;color:var(--accent-ink)}
+  .oc-h .big span{display:block;font-size:.6rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+  .load{height:7px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+  .load i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--copper))}
+  .oc-stats{display:flex;gap:8px;flex-wrap:wrap;font-size:.7rem}
+  .oc-stat{display:inline-flex;align-items:center;gap:5px;font-weight:700;color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--line);border-radius:99px;padding:2px 9px}
+  .oc-stat .pd{width:7px;height:7px;border-radius:99px}
+  .oc-stat.over{color:var(--hi);background:var(--hi-soft);border-color:transparent}
+  .oc-list{display:flex;flex-direction:column;gap:6px;max-height:230px;overflow-y:auto}
+  .oc-row{display:flex;align-items:center;gap:8px;font-size:.76rem;padding:6px 8px;border-radius:8px;background:var(--surface-2);cursor:pointer;transition:.12s}
+  .oc-row:hover{background:var(--surface-3)}
+  .oc-row .rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .oc-row .rs{font-family:var(--mono);font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:5px;white-space:nowrap}
+  .oc-empty{font-size:.74rem;color:var(--ink-soft);text-align:center;padding:10px}
   @media(max-width:560px){.search{width:140px}}
 </style>
 </head>
@@ -173,6 +198,10 @@
     <img class="logo" src="logo.png" alt="Easy Money"/>
     <div class="brand"><span class="kicker">Easy Money · Data</span><h1>Prioritization Board : Task</h1></div>
     <div class="spacer"></div>
+    <div class="seg" role="tablist" aria-label="หน้า">
+      <button id="pg-board" aria-pressed="true">🗂️ บอร์ด</button>
+      <button id="pg-plan" aria-pressed="false">👥 Planning</button>
+    </div>
     <input id="search" class="search" type="search" placeholder="ค้นหา ชื่อ/เรื่อง/แผนก…" aria-label="ค้นหา"/>
     <span id="synctag" class="synctag sync">…</span>
     <button id="refresh" class="ghost" title="ดึงงานใหม่จาก Notion export (merge)">↻ Sync</button>
@@ -196,6 +225,7 @@
 
   <div class="kpis" id="kpis"></div>
 
+  <div id="view-board">
   <section class="zone">
     <div class="zlab"><span class="ic">📥</span><h2>Task Queue — งานเข้าใหม่ (ยังไม่รับ)</h2><span class="cnt" id="q-cnt">0</span><span class="hint">คนขอ req มากองที่นี่ · กด “รับงาน” หรือลากลงบอร์ดด้านล่างเพื่อเริ่มทำ</span></div>
     <div class="queue" id="queue-box" data-dim="queue"><div class="qgrid" id="queue"></div></div>
@@ -210,6 +240,14 @@
     <div class="zlab"><span class="ic">✅</span><h2>เสร็จแล้ว — แยกตามฝ่าย</h2><span class="cnt" id="done-cnt" style="color:var(--st-done);background:color-mix(in srgb,var(--st-done) 15%,transparent)">0</span><span class="hint">งาน Done จัดกลุ่มตามฝ่ายที่ขอ (ฝ่ายที่ปิดเยอะสุดก่อน) · ลากการ์ดลงกล่องนี้ = ปิดงาน</span></div>
     <div class="board-wrap"><div class="board done" id="dboard"></div></div>
   </section>
+  </div><!-- /view-board -->
+
+  <div id="view-planning" hidden>
+    <section class="zone">
+      <div class="zlab"><span class="ic">👥</span><h2>Planning — Capacity / Workload</h2><span class="hint">งานที่แต่ละคนรับไป + สถานะที่ทำอยู่ · เรียงคนที่โหลดเยอะสุดก่อน · ใช้ filter เดือน/ปี/ฝ่าย สโคปได้</span></div>
+      <div class="plan-grid" id="plan"></div>
+    </section>
+  </div>
 </div>
 
 <div class="scrim" id="scrim"></div>
@@ -243,6 +281,7 @@
   /* ---------- state ---------- */
   let reqs=[];
   let showCancel=false;
+  let page="board";
   const filt={cat:"",prio:"",dept:"",company:"",owner:"",year:"",months:[],q:""};
   const MONTHS=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
   let lastSeen=null, sbOK=false, pushTimer=null, drawerOpen=false, notifySaved=false;
@@ -358,7 +397,36 @@
   }
 
   /* ---------- render ---------- */
-  function render(){renderKpis();renderQueue();renderStatusBoard();renderDoneBoard();wireDnD();}
+  function render(){renderKpis();renderQueue();renderStatusBoard();renderDoneBoard();renderPlanning();wireDnD();}
+
+  function renderPlanning(){
+    const base=reqs.filter(match);
+    const now=new Date();now.setHours(0,0,0,0);
+    const active=base.filter(r=>r.stage==="board"&&!isDone(r));
+    const rows=OWNERS.map(o=>{
+      const mine=active.filter(r=>r.owner===o);
+      return {owner:o,mine,overdue:mine.filter(r=>r.deadline&&new Date(r.deadline)<now).length,done:base.filter(r=>r.owner===o&&r.status==="Done").length};
+    });
+    const unassigned=active.filter(r=>!r.owner);
+    const maxLoad=Math.max(1,...rows.map(r=>r.mine.length),unassigned.length);
+    const card=(name,mine,overdue,done,cls)=>{
+      const byStat={};mine.forEach(t=>{byStat[t.status]=(byStat[t.status]||0)+1;});
+      const chips=ACTIVE.filter(s=>byStat[s]).map(s=>`<span class="oc-stat"><span class="pd" style="background:var(${statColor(s)})"></span>${esc(s)} ${byStat[s]}</span>`).join("");
+      const list=mine.slice().sort((a,b)=>prioRank(a.prio)-prioRank(b.prio)||(a.deadline||"9999").localeCompare(b.deadline||"9999"))
+        .map(t=>{const d=dueMeta(t);return `<div class="oc-row" data-open="${esc(t.id)}"><span class="pd" style="width:7px;height:7px;border-radius:99px;background:var(${statColor(t.status)});flex:none"></span><span class="rt">${esc(t.title)}</span>${t.prio?`<span class="rs" style="color:var(${prioColor(t.prio)})">${esc(t.prio[0])}</span>`:""}${d.txt?`<span class="rs ${d.cls}">${esc(d.txt)}</span>`:""}</div>`;}).join("")||'<div class="oc-empty">— ไม่มีงานที่กำลังทำ —</div>';
+      return `<div class="ocard ${cls||""}">
+        <div class="oc-h"><span class="av" style="background:${cls?"var(--md)":avColor(name)}">${esc(cls?"?":initials(name))}</span><span class="nm">${esc(name)}</span><span class="big"><b>${mine.length}</b><span>กำลังทำ</span></span></div>
+        <div class="load"><i style="width:${Math.round(mine.length/maxLoad*100)}%"></i></div>
+        <div class="oc-stats">${chips||'<span class="oc-stat">— ว่าง —</span>'}${overdue?`<span class="oc-stat over">⚠ เลย ${overdue}</span>`:""}${done?`<span class="oc-stat"><span class="pd" style="background:var(--st-done)"></span>เสร็จ ${done}</span>`:""}</div>
+        <div class="oc-list">${list}</div>
+      </div>`;
+    };
+    let html=rows.sort((a,b)=>b.mine.length-a.mine.length).map(r=>card(r.owner,r.mine,r.overdue,r.done,"")).join("");
+    if(unassigned.length)html+=card("ยังไม่มอบหมาย",unassigned,unassigned.filter(r=>r.deadline&&new Date(r.deadline)<now).length,0,"unassigned");
+    $("#plan").innerHTML=html;
+    $("#plan").querySelectorAll("[data-open]").forEach(el=>el.addEventListener("click",()=>openDrawer(el.dataset.open)));
+  }
+  function setPage(p){page=p;$("#view-board").hidden=p!=="board";$("#view-planning").hidden=p!=="planning";$("#pg-board").setAttribute("aria-pressed",p==="board");$("#pg-plan").setAttribute("aria-pressed",p==="planning");}
 
   function renderKpis(){
     const all=reqs.filter(match);
@@ -535,6 +603,8 @@
   function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),1400);}
 
   /* ---------- events ---------- */
+  $("#pg-board").addEventListener("click",()=>setPage("board"));
+  $("#pg-plan").addEventListener("click",()=>setPage("planning"));
   $("#dw-close").addEventListener("click",closeDrawer);
   $("#scrim").addEventListener("click",closeDrawer);
   document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
