@@ -175,6 +175,8 @@
     <select id="f-dept" class="ghost" aria-label="แผนก"></select>
     <select id="f-company" class="ghost" aria-label="เครือบริษัท"></select>
     <select id="f-owner" class="ghost" aria-label="ผู้รับผิดชอบ"></select>
+    <select id="f-year" class="ghost" aria-label="ปี (ตามวันที่ขอ)"></select>
+    <select id="f-month" class="ghost" aria-label="เดือน (ตามวันที่ขอ)"></select>
     <button id="f-done" class="ghost" title="แสดง/ซ่อน คอลัมน์ Cancelled ในงานที่รับแล้ว">แสดง Cancelled</button>
     <button id="f-clear" class="ghost">ล้างตัวกรอง</button>
   </div>
@@ -228,7 +230,8 @@
   /* ---------- state ---------- */
   let reqs=[];
   let showCancel=false;
-  const filt={cat:"",prio:"",dept:"",company:"",owner:"",q:""};
+  const filt={cat:"",prio:"",dept:"",company:"",owner:"",year:"",month:"",q:""};
+  const MONTHS=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
   let lastSeen=null, sbOK=false, pushTimer=null, drawerOpen=false, notifySaved=false;
 
   const $=s=>document.querySelector(s);
@@ -237,6 +240,9 @@
   const avColor=n=>AV[Math.abs([...String(n)].reduce((a,c)=>a+c.charCodeAt(0),0))%AV.length];
   const initials=n=>{n=String(n||"?").trim();return n?n.slice(0,2).toUpperCase():"?";};
   const byId=id=>reqs.find(x=>x.id===id);
+  const reqDate=r=>r.submitted||r.created||""; // filter month/year by request submission date
+  const reqYear=r=>{const d=reqDate(r);return d?d.slice(0,4):"";};
+  const reqMonth=r=>{const d=reqDate(r);return d&&d.length>=7?String(+d.slice(5,7)):"";};
 
   function dueMeta(o){
     if(o.status==="Done"||o.status==="Cancelled")return{cls:"",txt:o.completed?"✓ "+fmtD(o.completed):""};
@@ -319,6 +325,9 @@
     $("#f-dept").innerHTML=opt(depts,filt.dept,"ทุกแผนก");
     $("#f-company").innerHTML=opt(comps,filt.company,"ทุกเครือ");
     $("#f-owner").innerHTML=opt(OWNERS,filt.owner,"ทุก Owner");
+    const years=[...new Set(reqs.map(reqYear).filter(Boolean))].sort().reverse();
+    $("#f-year").innerHTML=`<option value="">ทุกปี</option>`+years.map(y=>`<option value="${y}"${y===filt.year?" selected":""}>${+y+543}</option>`).join("");
+    $("#f-month").innerHTML=`<option value="">ทุกเดือน</option>`+MONTHS.map((m,i)=>`<option value="${i+1}"${String(i+1)===filt.month?" selected":""}>${m}</option>`).join("");
   }
   function match(r){
     if(filt.cat&&r.category!==filt.cat)return false;
@@ -326,6 +335,8 @@
     if(filt.dept&&r.deptShort!==filt.dept)return false;
     if(filt.company&&r.company!==filt.company)return false;
     if(filt.owner&&r.owner!==filt.owner)return false;
+    if(filt.year&&reqYear(r)!==filt.year)return false;
+    if(filt.month&&reqMonth(r)!==filt.month)return false;
     if(filt.q){const q=filt.q.toLowerCase();if((r.name+" "+r.title+" "+r.desc+" "+r.dept+" "+r.type).toLowerCase().indexOf(q)<0)return false;}
     return true;
   }
@@ -506,9 +517,11 @@
   $("#f-dept").addEventListener("change",e=>{filt.dept=e.target.value;render();});
   $("#f-company").addEventListener("change",e=>{filt.company=e.target.value;render();});
   $("#f-owner").addEventListener("change",e=>{filt.owner=e.target.value;render();});
+  $("#f-year").addEventListener("change",e=>{filt.year=e.target.value;render();});
+  $("#f-month").addEventListener("change",e=>{filt.month=e.target.value;render();});
   $("#search").addEventListener("input",e=>{filt.q=e.target.value.trim();render();});
   $("#f-done").addEventListener("click",()=>{showCancel=!showCancel;$("#f-done").classList.toggle("on",showCancel);$("#f-done").textContent=showCancel?"ซ่อน Cancelled":"แสดง Cancelled";render();});
-  $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.q="";$("#search").value="";buildFilters();render();});
+  $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.year=filt.month=filt.q="";$("#search").value="";buildFilters();render();});
   $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs);reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
   const curDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
   $("#theme").addEventListener("click",()=>{const nv=curDark()?"light":"dark";document.documentElement.dataset.theme=nv;try{localStorage.setItem(TKEY,nv);}catch(e){}});
