@@ -284,7 +284,7 @@
         output:o.output||"",title:o.title||o.desc||"(ไม่มีหัวข้อ)",desc:o.desc||"",note:o.note||"",
         worklink:o.worklink||"",formlink:o.formlink||"",
         category:CATS.indexOf(o.category)>=0?o.category:"Data Request",
-        deadline:o.deadline||"",submitted:o.submitted||"",completed:o.completed||"",created:o.created||"",
+        deadline:o.deadline||"",startDate:o.startDate||"",completed:o.completed||"",actualDate:o.actualDate||"",submitted:o.submitted||"",created:o.created||"",
         owner:o.owner||""
       };
     });
@@ -295,7 +295,7 @@
     let added=0;
     seed.forEach(s=>{
       if(!map[s.id]){map[s.id]=s;added++;}
-      else{const e=map[s.id];["name","type","dept","deptShort","company","output","title","desc","worklink","formlink","category","submitted","url"].forEach(k=>{if(s[k])e[k]=s[k];});if(!e.owner&&s.owner)e.owner=s.owner;} // deadline/status/owner/note = user-editable, never overwrite from seed
+      else{const e=map[s.id];["name","type","dept","deptShort","company","output","title","desc","worklink","formlink","category","submitted","url"].forEach(k=>{if(s[k])e[k]=s[k];});if(!e.owner&&s.owner)e.owner=s.owner;["startDate","completed","actualDate"].forEach(k=>{if(!e[k]&&s[k])e[k]=s[k];});} // deadline/status/owner/note/dates = user-editable; dates only backfilled if empty
     });
     return {list:Object.values(map),added};
   }
@@ -500,12 +500,19 @@
         <div class="fld"><label>ผู้รับผิดชอบ</label><select id="d-owner">${ownerOpts}</select></div>
         <div class="fld"><label>Deadline</label><input id="d-deadline" type="date" value="${esc(r.deadline)}"/></div>
       </div>
+      <div class="grid2">
+        <div class="fld"><label>Start date</label><input id="d-start" type="date" value="${esc(r.startDate)}"/></div>
+        <div class="fld"><label>Complete date</label><input id="d-complete" type="date" value="${esc(r.completed)}"/></div>
+      </div>
+      <div class="grid2">
+        <div class="fld"><label>Actual date</label><input id="d-actual" type="date" value="${esc(r.actualDate)}"/></div>
+        <div class="fld"><label>วันที่ขอ (request)</label><input type="date" value="${esc((r.submitted||'').slice(0,10))}" readonly/></div>
+      </div>
       <div class="fld"><label>Note (ภายในทีม)</label><textarea id="d-note" placeholder="บันทึกความคืบหน้า…">${esc(r.note)}</textarea></div>
       <div class="divlab">ข้อมูลจาก request</div>
       <div class="grid2"><div class="fld"><label>แผนก</label><div class="ro">${esc(r.dept||"—")}</div></div><div class="fld"><label>เครือบริษัท</label><div class="ro">${esc(r.company||"—")}</div></div></div>
       <div class="grid2"><div class="fld"><label>ประเภทงาน</label><div class="ro">${esc(r.type||"—")}</div></div><div class="fld"><label>Output</label><div class="ro">${esc(r.output||"—")}</div></div></div>
-      <div class="grid2"><div class="fld"><label>วันที่ขอ</label><div class="ro">${esc(r.submitted||"—")}</div></div><div class="fld"><label>วันเสร็จ</label><div class="ro">${esc(r.completed||"—")}</div></div></div>
-      <div class="divlab">ลิงก์</div>
+      <div class="divlab">ลิงก์ · sync กับ Notion</div>
       <a class="lk ${wl?"":"off"}" href="${wl||"#"}" target="_blank" rel="noopener">📄 ไฟล์งานที่ทำ</a>
       <a class="lk ${fl?"":"off"}" href="${fl||"#"}" target="_blank" rel="noopener">📎 ไฟล์แนบจาก request form</a>
       <a class="lk" href="${esc(notionUrl)}" target="_blank" rel="noopener">↗ เปิดใน Notion (ต้นฉบับ)</a>`;
@@ -514,6 +521,9 @@
     bind("#d-prio",(o,v)=>o.prio=v);
     bind("#d-owner",(o,v)=>o.owner=v);
     bind("#d-deadline",(o,v)=>o.deadline=v);
+    bind("#d-start",(o,v)=>o.startDate=v);
+    bind("#d-complete",(o,v)=>o.completed=v);
+    bind("#d-actual",(o,v)=>o.actualDate=v);
     document.querySelectorAll("#dw-body [data-stage]").forEach(b=>b.addEventListener("click",()=>{const o=byId(id);if(!o)return;o.stage=b.dataset.stage;openDrawer(id);render();queueSave();}));
     const nt=$("#d-note");nt&&nt.addEventListener("input",e=>{const o=byId(id);if(o)o.note=e.target.value;notifySaved=true;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,700);});
     $("#scrim").classList.add("show");$("#drawer").classList.add("open");drawerOpen=true;
