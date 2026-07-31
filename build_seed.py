@@ -25,16 +25,16 @@ def norm_prio(p):
 
 
 def norm_status(s):
-    s = (s or "").strip()
-    return s if s in STATUSES else "Not started"
+    # pass the raw Notion status through; the client (LEGACY + STATUS) does the mapping
+    return (s or "").strip() or "Not started"
 
 
 def pid(url):
     if not url:
         return ""
-    seg = url.rstrip("/").split("/")[-1]
-    seg = seg.split("?")[0]
-    return seg.replace("-", "")
+    seg = url.rstrip("/").split("/")[-1].split("?")[0].replace("-", "")
+    m = re.search(r"([0-9a-fA-F]{32})$", seg)  # stable 32-hex Notion id, ignore any title slug
+    return m.group(1).lower() if m else seg
 
 
 def clean(v):
@@ -89,7 +89,7 @@ for r in rows:
         "created": clean(r.get("createdTime")),
         "owner": "",
     }
-    # dedupe: keep the one with richer content (longer created wins ~ same)
+    # dedupe by id: later batch wins (batches are newest-first with minimal overlap)
     seen[i] = obj
 
 out = sorted(seen.values(), key=lambda x: x["created"], reverse=True)

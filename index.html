@@ -226,10 +226,11 @@
   let reqs=[];
   let showDone=false;
   const filt={cat:"",prio:"",dept:"",company:"",owner:"",q:""};
-  let lastSeen=null, sbOK=false, pushTimer=null, skipPush=false;
+  let lastSeen=null, sbOK=false, pushTimer=null, drawerOpen=false, notifySaved=false;
 
   const $=s=>document.querySelector(s);
   const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const safeHref=u=>{u=String(u||"").trim();return /^https?:\/\//i.test(u)?esc(u):"";}; // block javascript:/data: URLs
   const avColor=n=>AV[Math.abs([...String(n)].reduce((a,c)=>a+c.charCodeAt(0),0))%AV.length];
   const initials=n=>{n=String(n||"?").trim();return n?n.slice(0,2).toUpperCase():"?";};
   const byId=id=>reqs.find(x=>x.id===id);
@@ -270,7 +271,7 @@
     let added=0;
     seed.forEach(s=>{
       if(!map[s.id]){map[s.id]=s;added++;}
-      else{const e=map[s.id];["name","type","dept","deptShort","company","output","title","desc","worklink","formlink","category","deadline","submitted","url"].forEach(k=>{if(s[k])e[k]=s[k];});if(!e.owner&&s.owner)e.owner=s.owner;}
+      else{const e=map[s.id];["name","type","dept","deptShort","company","output","title","desc","worklink","formlink","category","submitted","url"].forEach(k=>{if(s[k])e[k]=s[k];});if(!e.owner&&s.owner)e.owner=s.owner;} // deadline/status/owner/note = user-editable, never overwrite from seed
     });
     return {list:Object.values(map),added};
   }
@@ -279,16 +280,16 @@
   function setSync(s){const el=$("#synctag");el.className="synctag "+s;el.textContent=s==="ok"?"● synced":s==="err"?"● offline":"syncing…";}
   async function sbLoad(){const r=await fetch(SB_URL+"/rest/v1/board?id=eq."+BOARD_ID+"&select=data,updated_at",{headers:SB_HEAD});if(!r.ok)throw new Error("load "+r.status);const rows=await r.json();return rows[0]||null;}
   async function sbSave(){
-    if(skipPush){skipPush=false;return;}
+    clearTimeout(pushTimer);pushTimer=null;
     try{
       const body=[{id:BOARD_ID,data:{reqs},updated_at:new Date().toISOString()}];
       const r=await fetch(SB_URL+"/rest/v1/board?on_conflict=id",{method:"POST",headers:Object.assign({},SB_HEAD,{Prefer:"resolution=merge-duplicates,return=representation"}),body:JSON.stringify(body)});
       if(!r.ok)throw new Error("save "+r.status);
       const rows=await r.json();if(rows&&rows[0])lastSeen=rows[0].updated_at;
-      sbOK=true;setSync("ok");
-    }catch(e){sbOK=false;setSync("err");}
+      sbOK=true;setSync("ok");if(notifySaved){toast("บันทึกแล้ว");notifySaved=false;}
+    }catch(e){console.error("sbSave failed",e);sbOK=false;setSync("err");if(notifySaved){toast("บันทึกไม่สำเร็จ ⚠️");notifySaved=false;}}
   }
-  function queueSave(){clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,500);toast("บันทึกแล้ว");}
+  function queueSave(){notifySaved=true;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,500);}
   function adopt(row){if(!row||!row.data||!Array.isArray(row.data.reqs))return false;reqs=normalize(row.data.reqs);lastSeen=row.updated_at;return true;}
 
   async function boot(){
@@ -299,8 +300,9 @@
     const m=mergeSeed(reqs);reqs=m.list;
     setSync(sbOK?"ok":"err");
     buildFilters();render();
-    if(sbOK){skipPush=true;await sbSave();skipPush=false;await sbSave();}
-    setInterval(async()=>{try{const r=await sbLoad();if(r&&r.updated_at&&r.updated_at!==lastSeen){adopt(r);render();}}catch(e){}},15000);
+    if(sbOK&&(!loaded||m.added))await sbSave();
+    // poll for remote changes — skip while user is editing (drawer open or a save pending) to avoid clobbering unsaved edits
+    setInterval(async()=>{if(drawerOpen||pushTimer)return;try{const r=await sbLoad();if(r&&r.updated_at&&r.updated_at!==lastSeen){adopt(r);render();}}catch(e){}},15000);
   }
 
   /* ---------- filters ---------- */
@@ -450,6 +452,7 @@
     const sel=(arr,cur)=>arr.map(v=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(v||"— ไม่ระบุ —")}</option>`).join("");
     const ownerOpts=`<option value=""${!r.owner?" selected":""}>— ยังไม่กำหนด —</option>`+sel(OWNERS,r.owner);
     const notionUrl="https://www.notion.so/"+r.id;
+    const wl=safeHref(r.worklink),fl=safeHref(r.formlink);
     $("#dw-body").innerHTML=`
       <div class="fld"><label>อยู่ในโซน</label><div class="segstage">
         <button data-stage="queue" class="${r.stage==="queue"?"on":""}">📥 Queue</button>
@@ -473,19 +476,19 @@
       <div class="grid2"><div class="fld"><label>ประเภทงาน</label><div class="ro">${esc(r.type||"—")}</div></div><div class="fld"><label>Output</label><div class="ro">${esc(r.output||"—")}</div></div></div>
       <div class="grid2"><div class="fld"><label>วันที่ขอ</label><div class="ro">${esc(r.submitted||"—")}</div></div><div class="fld"><label>วันเสร็จ</label><div class="ro">${esc(r.completed||"—")}</div></div></div>
       <div class="divlab">ลิงก์</div>
-      <a class="lk ${r.worklink?"":"off"}" href="${esc(r.worklink)}" target="_blank" rel="noopener">📄 ไฟล์งานที่ทำ</a>
-      <a class="lk ${r.formlink?"":"off"}" href="${esc(r.formlink)}" target="_blank" rel="noopener">📎 ไฟล์แนบจาก request form</a>
+      <a class="lk ${wl?"":"off"}" href="${wl||"#"}" target="_blank" rel="noopener">📄 ไฟล์งานที่ทำ</a>
+      <a class="lk ${fl?"":"off"}" href="${fl||"#"}" target="_blank" rel="noopener">📎 ไฟล์แนบจาก request form</a>
       <a class="lk" href="${esc(notionUrl)}" target="_blank" rel="noopener">↗ เปิดใน Notion (ต้นฉบับ)</a>`;
-    const bind=(s,f)=>{const el=$(s);el&&el.addEventListener("change",e=>{f(e.target.value);render();queueSave();});};
-    bind("#d-status",v=>{r.status=v;if(r.stage!=="board")r.stage="board";});
-    bind("#d-prio",v=>r.prio=v);
-    bind("#d-owner",v=>r.owner=v);
-    bind("#d-deadline",v=>r.deadline=v);
-    document.querySelectorAll("#dw-body [data-stage]").forEach(b=>b.addEventListener("click",()=>{r.stage=b.dataset.stage;openDrawer(id);render();queueSave();}));
-    const nt=$("#d-note");nt&&nt.addEventListener("input",e=>{r.note=e.target.value;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,700);});
-    $("#scrim").classList.add("show");$("#drawer").classList.add("open");
+    const bind=(s,f)=>{const el=$(s);el&&el.addEventListener("change",e=>{const o=byId(id);if(!o)return;f(o,e.target.value);render();queueSave();});};
+    bind("#d-status",(o,v)=>{o.status=v;if(o.stage!=="board")o.stage="board";});
+    bind("#d-prio",(o,v)=>o.prio=v);
+    bind("#d-owner",(o,v)=>o.owner=v);
+    bind("#d-deadline",(o,v)=>o.deadline=v);
+    document.querySelectorAll("#dw-body [data-stage]").forEach(b=>b.addEventListener("click",()=>{const o=byId(id);if(!o)return;o.stage=b.dataset.stage;openDrawer(id);render();queueSave();}));
+    const nt=$("#d-note");nt&&nt.addEventListener("input",e=>{const o=byId(id);if(o)o.note=e.target.value;notifySaved=true;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,700);});
+    $("#scrim").classList.add("show");$("#drawer").classList.add("open");drawerOpen=true;
   }
-  function closeDrawer(){$("#scrim").classList.remove("show");$("#drawer").classList.remove("open");}
+  function closeDrawer(){$("#scrim").classList.remove("show");$("#drawer").classList.remove("open");drawerOpen=false;}
 
   /* ---------- misc ---------- */
   let toastT=null;
