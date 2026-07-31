@@ -71,6 +71,16 @@
   .synctag.err{color:var(--hi);border-color:color-mix(in srgb,var(--hi) 40%,transparent)}
   .synctag.sync{color:var(--ink-soft)}
   .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 0 4px}
+  .ms{position:relative;display:inline-block}
+  .ms-panel{position:absolute;top:calc(100% + 4px);left:0;z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:7px;min-width:190px;display:grid;grid-template-columns:1fr 1fr;gap:1px}
+  .ms-panel[hidden]{display:none}
+  .ms-opt{display:flex;align-items:center;gap:7px;font-size:.8rem;padding:5px 7px;border-radius:7px;cursor:pointer;color:var(--ink);user-select:none}
+  .ms-opt:hover{background:var(--surface-2)}
+  .ms-opt input{accent-color:var(--accent);margin:0}
+  .ms-act{grid-column:1/-1;display:flex;justify-content:space-between;gap:6px;border-top:1px solid var(--line);margin-top:5px;padding-top:6px}
+  .ms-act button{font:inherit;font-size:.74rem;font-weight:700;border:0;background:transparent;color:var(--accent-ink);cursor:pointer;padding:3px 7px;border-radius:6px}
+  .ms-act button:hover{background:var(--surface-2)}
+  #f-month-btn.on{border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:12px 0 6px}
   .kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:13px 15px;box-shadow:var(--shadow)}
   .kpi .lab{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:700;margin-bottom:5px}
@@ -176,7 +186,10 @@
     <select id="f-company" class="ghost" aria-label="เครือบริษัท"></select>
     <select id="f-owner" class="ghost" aria-label="ผู้รับผิดชอบ"></select>
     <select id="f-year" class="ghost" aria-label="ปี (ตามวันที่ขอ)"></select>
-    <select id="f-month" class="ghost" aria-label="เดือน (ตามวันที่ขอ)"></select>
+    <div class="ms" id="f-month-wrap">
+      <button type="button" id="f-month-btn" class="ghost" aria-haspopup="true" aria-expanded="false">ทุกเดือน ▾</button>
+      <div class="ms-panel" id="f-month-panel" hidden></div>
+    </div>
     <button id="f-done" class="ghost" title="แสดง/ซ่อน คอลัมน์ Cancelled ในงานที่รับแล้ว">แสดง Cancelled</button>
     <button id="f-clear" class="ghost">ล้างตัวกรอง</button>
   </div>
@@ -230,7 +243,7 @@
   /* ---------- state ---------- */
   let reqs=[];
   let showCancel=false;
-  const filt={cat:"",prio:"",dept:"",company:"",owner:"",year:"",month:"",q:""};
+  const filt={cat:"",prio:"",dept:"",company:"",owner:"",year:"",months:[],q:""};
   const MONTHS=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
   let lastSeen=null, sbOK=false, pushTimer=null, drawerOpen=false, notifySaved=false;
 
@@ -243,6 +256,7 @@
   const reqDate=r=>r.submitted||r.created||""; // filter month/year by request submission date
   const reqYear=r=>{const d=reqDate(r);return d?d.slice(0,4):"";};
   const reqMonth=r=>{const d=reqDate(r);return d&&d.length>=7?String(+d.slice(5,7)):"";};
+  const monthLabel=()=>{const ms=filt.months;if(!ms.length)return "ทุกเดือน";if(ms.length<=3)return ms.slice().sort((a,b)=>a-b).map(m=>MONTHS[m-1]).join(", ");return ms.length+" เดือน";};
 
   function dueMeta(o){
     if(o.status==="Done"||o.status==="Cancelled")return{cls:"",txt:o.completed?"✓ "+fmtD(o.completed):""};
@@ -327,7 +341,9 @@
     $("#f-owner").innerHTML=opt(OWNERS,filt.owner,"ทุก Owner");
     const years=[...new Set(reqs.map(reqYear).filter(Boolean))].sort().reverse();
     $("#f-year").innerHTML=`<option value="">ทุกปี</option>`+years.map(y=>`<option value="${y}"${y===filt.year?" selected":""}>${+y+543}</option>`).join("");
-    $("#f-month").innerHTML=`<option value="">ทุกเดือน</option>`+MONTHS.map((m,i)=>`<option value="${i+1}"${String(i+1)===filt.month?" selected":""}>${m}</option>`).join("");
+    $("#f-month-panel").innerHTML=MONTHS.map((m,i)=>{const v=String(i+1),on=filt.months.indexOf(v)>=0;return `<label class="ms-opt"><input type="checkbox" value="${v}"${on?" checked":""}>${m}</label>`;}).join("")+`<div class="ms-act"><button data-ms="all">ทั้งหมด</button><button data-ms="clear">ล้าง</button></div>`;
+    $("#f-month-btn").textContent=monthLabel()+" ▾";
+    $("#f-month-btn").classList.toggle("on",filt.months.length>0);
   }
   function match(r){
     if(filt.cat&&r.category!==filt.cat)return false;
@@ -336,7 +352,7 @@
     if(filt.company&&r.company!==filt.company)return false;
     if(filt.owner&&r.owner!==filt.owner)return false;
     if(filt.year&&reqYear(r)!==filt.year)return false;
-    if(filt.month&&reqMonth(r)!==filt.month)return false;
+    if(filt.months.length&&filt.months.indexOf(reqMonth(r))<0)return false;
     if(filt.q){const q=filt.q.toLowerCase();if((r.name+" "+r.title+" "+r.desc+" "+r.dept+" "+r.type).toLowerCase().indexOf(q)<0)return false;}
     return true;
   }
@@ -518,10 +534,13 @@
   $("#f-company").addEventListener("change",e=>{filt.company=e.target.value;render();});
   $("#f-owner").addEventListener("change",e=>{filt.owner=e.target.value;render();});
   $("#f-year").addEventListener("change",e=>{filt.year=e.target.value;render();});
-  $("#f-month").addEventListener("change",e=>{filt.month=e.target.value;render();});
+  $("#f-month-btn").addEventListener("click",e=>{e.stopPropagation();const p=$("#f-month-panel");p.hidden=!p.hidden;$("#f-month-btn").setAttribute("aria-expanded",String(!p.hidden));});
+  $("#f-month-panel").addEventListener("change",e=>{const t=e.target;if(!t.matches('input[type=checkbox]'))return;const v=t.value,i=filt.months.indexOf(v);if(t.checked){if(i<0)filt.months.push(v);}else if(i>=0)filt.months.splice(i,1);$("#f-month-btn").textContent=monthLabel()+" ▾";$("#f-month-btn").classList.toggle("on",filt.months.length>0);render();});
+  $("#f-month-panel").addEventListener("click",e=>{const b=e.target.closest('[data-ms]');if(!b)return;filt.months=b.dataset.ms==="all"?MONTHS.map((m,i)=>String(i+1)):[];buildFilters();render();});
+  document.addEventListener("click",e=>{if(!e.target.closest('#f-month-wrap')){const p=$("#f-month-panel");if(p&&!p.hidden){p.hidden=true;$("#f-month-btn").setAttribute("aria-expanded","false");}}});
   $("#search").addEventListener("input",e=>{filt.q=e.target.value.trim();render();});
   $("#f-done").addEventListener("click",()=>{showCancel=!showCancel;$("#f-done").classList.toggle("on",showCancel);$("#f-done").textContent=showCancel?"ซ่อน Cancelled":"แสดง Cancelled";render();});
-  $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.year=filt.month=filt.q="";$("#search").value="";buildFilters();render();});
+  $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.year=filt.q="";filt.months=[];$("#search").value="";buildFilters();render();});
   $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs);reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
   const curDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
   $("#theme").addEventListener("click",()=>{const nv=curDark()?"light":"dark";document.documentElement.dataset.theme=nv;try{localStorage.setItem(TKEY,nv);}catch(e){}});
