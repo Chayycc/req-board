@@ -109,6 +109,8 @@
   .col-h .t{font-weight:800;font-size:.82rem}
   .col-h .c{font-family:var(--mono);font-size:.7rem;font-weight:700;color:var(--ink-soft);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:1px 8px}
   .stack{display:flex;flex-direction:column;gap:9px;min-height:44px}
+  .board.done .col{flex:0 0 216px;background:color-mix(in srgb,var(--st-done) 6%,var(--surface-2))}
+  .board.done .stack{max-height:58vh;overflow-y:auto;padding-right:3px}
   .tcard{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 11px 10px 14px;box-shadow:var(--shadow);cursor:grab;transition:transform .12s,box-shadow .12s,opacity .12s}
   .tcard:hover{transform:translateY(-1px);box-shadow:0 2px 4px rgba(20,25,40,.06),0 8px 20px rgba(20,25,40,.09)}
   .tcard.dragging{opacity:.4}
@@ -173,7 +175,7 @@
     <select id="f-dept" class="ghost" aria-label="แผนก"></select>
     <select id="f-company" class="ghost" aria-label="เครือบริษัท"></select>
     <select id="f-owner" class="ghost" aria-label="ผู้รับผิดชอบ"></select>
-    <button id="f-done" class="ghost" title="แสดง/ซ่อน Done &amp; Cancelled">แสดง Done/Cancelled</button>
+    <button id="f-done" class="ghost" title="แสดง/ซ่อน คอลัมน์ Cancelled ในงานที่รับแล้ว">แสดง Cancelled</button>
     <button id="f-clear" class="ghost">ล้างตัวกรอง</button>
   </div>
 
@@ -187,6 +189,11 @@
   <section class="zone">
     <div class="zlab"><span class="ic">🗂️</span><h2>งานที่รับแล้ว</h2><span class="hint">แบ่งตาม Status · ลากการ์ดข้ามคอลัมน์เพื่อเปลี่ยนสถานะ · ลากจาก Queue ลงมาเพื่อรับงาน</span></div>
     <div class="board-wrap"><div class="board" id="sboard"></div></div>
+  </section>
+
+  <section class="zone">
+    <div class="zlab"><span class="ic">✅</span><h2>เสร็จแล้ว — แยกตามฝ่าย</h2><span class="cnt" id="done-cnt" style="color:var(--st-done);background:color-mix(in srgb,var(--st-done) 15%,transparent)">0</span><span class="hint">งาน Done จัดกลุ่มตามฝ่ายที่ขอ (ฝ่ายที่ปิดเยอะสุดก่อน) · ลากการ์ดลงกล่องนี้ = ปิดงาน</span></div>
+    <div class="board-wrap"><div class="board done" id="dboard"></div></div>
   </section>
 </div>
 
@@ -209,7 +216,7 @@
   const TKEY="em_req_theme";
   const OWNERS=["Shay","Tar","Ohm","Toto","Fahsai","Mew","Sine","Bow","Ploy","Ako"];
   const STATUS=["Not started","Review","Req Approved","In progress","On Hold","Blocked","Done","Cancelled"];
-  const DONECOLS=["Done","Cancelled"];
+  const ACTIVE=["Not started","Review","Req Approved","In progress","On Hold","Blocked"]; // box 2 columns (Done -> box 3, Cancelled -> toggle)
   const PRIOS=["Urgent","High","Medium","Low"];
   const CATS=["Data Request","Data Issue"];
   const LEGACY={"Pending":"Review","Cancel":"Cancelled","Task Approved":"Req Approved","Approved":"Req Approved","UAT":"Review"};
@@ -220,7 +227,7 @@
 
   /* ---------- state ---------- */
   let reqs=[];
-  let showDone=false;
+  let showCancel=false;
   const filt={cat:"",prio:"",dept:"",company:"",owner:"",q:""};
   let lastSeen=null, sbOK=false, pushTimer=null, drawerOpen=false, notifySaved=false;
 
@@ -324,7 +331,7 @@
   }
 
   /* ---------- render ---------- */
-  function render(){renderKpis();renderQueue();renderStatusBoard();wireDnD();}
+  function render(){renderKpis();renderQueue();renderStatusBoard();renderDoneBoard();wireDnD();}
 
   function renderKpis(){
     const all=reqs.filter(match);
@@ -400,11 +407,21 @@
   }
 
   function renderStatusBoard(){
-    let ks=STATUS.slice();
-    if(!showDone)ks=ks.filter(k=>DONECOLS.indexOf(k)<0);
+    let ks=ACTIVE.slice();
+    if(showCancel)ks=ks.concat("Cancelled");
     const base=reqs.filter(r=>r.stage==="board"&&match(r));
     const cols=ks.map(k=>({dim:"status",k,label:k,color:statColor(k),items:base.filter(r=>r.status===k)}));
     renderBoard($("#sboard"),cols);
+  }
+  function renderDoneBoard(){
+    const base=reqs.filter(r=>r.status==="Done"&&match(r));
+    const groups={};
+    base.forEach(r=>{const d=r.deptShort||"อื่นๆ";(groups[d]=groups[d]||[]).push(r);});
+    const cols=Object.keys(groups).sort((a,b)=>groups[b].length-groups[a].length)
+      .map(d=>({dim:"done",k:d,label:d,color:"--st-done",items:groups[d]}));
+    $("#done-cnt").textContent=base.length;
+    if(!cols.length){$("#dboard").innerHTML='<div class="empty" style="flex:1">— ยังไม่มีงานเสร็จ —</div>';return;}
+    renderBoard($("#dboard"),cols);
   }
 
   /* ---------- drag & drop (cross-zone) ---------- */
@@ -425,6 +442,7 @@
         const dim=z.dataset.dim,col=z.dataset.col||"";
         if(dim==="queue"){r.stage="queue";}
         else if(dim==="status"){r.stage="board";r.status=col;}
+        else if(dim==="done"){r.stage="board";r.status="Done";}
         render();queueSave();
       });
     });
@@ -489,7 +507,7 @@
   $("#f-company").addEventListener("change",e=>{filt.company=e.target.value;render();});
   $("#f-owner").addEventListener("change",e=>{filt.owner=e.target.value;render();});
   $("#search").addEventListener("input",e=>{filt.q=e.target.value.trim();render();});
-  $("#f-done").addEventListener("click",()=>{showDone=!showDone;$("#f-done").classList.toggle("on",showDone);$("#f-done").textContent=showDone?"ซ่อน Done/Cancelled":"แสดง Done/Cancelled";render();});
+  $("#f-done").addEventListener("click",()=>{showCancel=!showCancel;$("#f-done").classList.toggle("on",showCancel);$("#f-done").textContent=showCancel?"ซ่อน Cancelled":"แสดง Cancelled";render();});
   $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.q="";$("#search").value="";buildFilters();render();});
   $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs);reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
   const curDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
