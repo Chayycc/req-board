@@ -179,17 +179,12 @@
   <div class="kpis" id="kpis"></div>
 
   <section class="zone">
-    <div class="zlab"><span class="ic">📥</span><h2>Task Queue — งานเข้าใหม่ (ยังไม่รับ)</h2><span class="cnt" id="q-cnt">0</span><span class="hint">คนขอ req มากองที่นี่ · ลากไป “Task Priority” เพื่อจัดลำดับความสำคัญ</span></div>
+    <div class="zlab"><span class="ic">📥</span><h2>Task Queue — งานเข้าใหม่ (ยังไม่รับ)</h2><span class="cnt" id="q-cnt">0</span><span class="hint">คนขอ req มากองที่นี่ · กด “รับงาน” หรือลากลงบอร์ดด้านล่างเพื่อเริ่มทำ</span></div>
     <div class="queue" id="queue-box" data-dim="queue"><div class="qgrid" id="queue"></div></div>
   </section>
 
   <section class="zone">
-    <div class="zlab"><span class="ic">🎯</span><h2>Task Priority — จัดลำดับความสำคัญ</h2><span class="hint">ลากการ์ดไปคอลัมน์ที่คิดว่าใช่ · แล้วลากลง “งานที่รับแล้ว” เมื่อเริ่มทำ</span></div>
-    <div class="board-wrap"><div class="board" id="pboard"></div></div>
-  </section>
-
-  <section class="zone">
-    <div class="zlab"><span class="ic">🗂️</span><h2>งานที่รับแล้ว</h2><span class="hint">แบ่งตาม Status · ลากการ์ดข้ามคอลัมน์เพื่อเปลี่ยนสถานะ</span></div>
+    <div class="zlab"><span class="ic">🗂️</span><h2>งานที่รับแล้ว</h2><span class="hint">แบ่งตาม Status · ลากการ์ดข้ามคอลัมน์เพื่อเปลี่ยนสถานะ · ลากจาก Queue ลงมาเพื่อรับงาน</span></div>
     <div class="board-wrap"><div class="board" id="sboard"></div></div>
   </section>
 </div>
@@ -252,7 +247,8 @@
   function normalize(list){
     return list.map(o=>{
       let st=o.status||"Not started"; st=LEGACY[st]||st; if(STATUS.indexOf(st)<0)st="Not started";
-      const stage=o.stage||(st==="Not started"?"queue":"board");
+      let stage=o.stage||(st==="Not started"?"queue":"board");
+      if(stage!=="queue")stage="board"; // merged model: only queue | board (legacy "priority" -> board)
       return {
         id:o.id,url:o.url||"",name:o.name||"(ไม่ระบุชื่อ)",status:st,stage,
         prio:PRIOS.indexOf(o.prio)>=0?o.prio:"",
@@ -327,19 +323,17 @@
   }
 
   /* ---------- render ---------- */
-  function render(){renderKpis();renderQueue();renderPriorityBoard();renderStatusBoard();wireDnD();}
+  function render(){renderKpis();renderQueue();renderStatusBoard();wireDnD();}
 
   function renderKpis(){
     const all=reqs.filter(match);
     const queue=all.filter(r=>r.stage==="queue");
-    const triage=all.filter(r=>r.stage==="priority");
     const active=all.filter(r=>r.stage==="board"&&!isDone(r));
     const now=new Date();now.setHours(0,0,0,0);
     const overdue=all.filter(r=>!isDone(r)&&r.deadline&&new Date(r.deadline)<now);
     const done=all.filter(r=>r.status==="Done");
     $("#kpis").innerHTML=`
       <div class="kpi q"><div class="lab">Queue · ยังไม่รับ</div><div class="val">${queue.length}</div><div class="sub">งานเข้าใหม่</div></div>
-      <div class="kpi t"><div class="lab">จัดลำดับ</div><div class="val">${triage.length}</div><div class="sub">Task Priority</div></div>
       <div class="kpi a"><div class="lab">กำลังทำ</div><div class="val">${active.length}</div><div class="sub">รับแล้ว ยังไม่จบ</div></div>
       <div class="kpi o"><div class="lab">เลยกำหนด</div><div class="val">${overdue.length}</div><div class="sub">overdue</div></div>
       <div class="kpi d"><div class="lab">เสร็จแล้ว</div><div class="val">${done.length}</div><div class="sub">Done</div></div>`;
@@ -364,14 +358,14 @@
         <div class="qmeta">${r.deptShort?`<span>🏢 ${esc(r.deptShort)}</span>`:""}${r.company?`<span>· ${esc(r.company)}</span>`:""}${r.type?`<span>· ${esc(r.type)}</span>`:""}</div>
         <div class="qacc">
           <select class="q-owner" aria-label="เลือกผู้รับ">${["<option value=''>ผู้รับ (ไม่บังคับ)…</option>",...OWNERS.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`)].join("")}</select>
-          <button class="acceptbtn" data-acc="${esc(r.id)}">จัดลำดับ →</button>
+          <button class="acceptbtn" data-acc="${esc(r.id)}">รับงาน →</button>
         </div>
       </div>`;
     }).join("");
     g.querySelectorAll("[data-open]").forEach(el=>el.addEventListener("click",e=>{e.stopPropagation();openDrawer(el.dataset.open);}));
     g.querySelectorAll("[data-acc]").forEach(btn=>btn.addEventListener("click",()=>{
       const card=btn.closest(".qcard");const owner=card.querySelector(".q-owner").value;
-      const r=byId(btn.dataset.acc);if(!r)return;if(owner)r.owner=owner;r.stage="priority";render();queueSave();toast("ย้ายไป Task Priority");
+      const r=byId(btn.dataset.acc);if(!r)return;if(owner)r.owner=owner;r.stage="board";render();queueSave();toast("รับงานแล้ว → บอร์ด");
     }));
   }
 
@@ -404,14 +398,6 @@
     }).join("");
   }
 
-  function renderPriorityBoard(){
-    const base=reqs.filter(r=>r.stage==="priority"&&match(r)&&(showDone||!isDone(r)));
-    const cols=PRIOS.map(k=>({dim:"prio",k,label:k,color:prioColor(k),items:base.filter(r=>r.prio===k)}));
-    const none=base.filter(r=>!r.prio);
-    cols.push({dim:"prio",k:"",label:"ไม่ระบุ",color:"--lo",items:none});
-    renderBoard($("#pboard"),cols);
-  }
-
   function renderStatusBoard(){
     let ks=STATUS.slice();
     if(!showDone)ks=ks.filter(k=>DONECOLS.indexOf(k)<0);
@@ -437,7 +423,6 @@
         const id=e.dataTransfer.getData("text/plain");const r=byId(id);if(!r)return;
         const dim=z.dataset.dim,col=z.dataset.col||"";
         if(dim==="queue"){r.stage="queue";}
-        else if(dim==="prio"){r.stage="priority";r.prio=col;}
         else if(dim==="status"){r.stage="board";r.status=col;}
         render();queueSave();
       });
@@ -447,7 +432,7 @@
   /* ---------- drawer ---------- */
   function openDrawer(id){
     const r=byId(id);if(!r)return;
-    const stageLabel={queue:"Task Queue",priority:"Task Priority",board:"งานที่รับแล้ว"};
+    const stageLabel={queue:"Task Queue",board:"งานที่รับแล้ว"};
     $("#dw-id").textContent=r.category+" · "+(r.deptShort||"—");
     const sel=(arr,cur)=>arr.map(v=>`<option value="${esc(v)}"${v===cur?" selected":""}>${esc(v||"— ไม่ระบุ —")}</option>`).join("");
     const ownerOpts=`<option value=""${!r.owner?" selected":""}>— ยังไม่กำหนด —</option>`+sel(OWNERS,r.owner);
@@ -455,8 +440,7 @@
     const wl=safeHref(r.worklink),fl=safeHref(r.formlink);
     $("#dw-body").innerHTML=`
       <div class="fld"><label>อยู่ในโซน</label><div class="segstage">
-        <button data-stage="queue" class="${r.stage==="queue"?"on":""}">📥 Queue</button>
-        <button data-stage="priority" class="${r.stage==="priority"?"on":""}">🎯 Priority</button>
+        <button data-stage="queue" class="${r.stage==="queue"?"on":""}">📥 Queue (ยังไม่รับ)</button>
         <button data-stage="board" class="${r.stage==="board"?"on":""}">🗂️ รับแล้ว</button>
       </div></div>
       <div class="fld"><label>ผู้ขอ (Request by)</label><div class="ro">${esc(r.name)}</div></div>
