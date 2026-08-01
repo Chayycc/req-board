@@ -10,7 +10,7 @@ only when empty; brand-new Notion rows are added.
 Env:
   NOTION_TOKEN   Notion internal integration secret (required)
 """
-import json, os, re, sys, urllib.request
+import json, os, re, sys, time, urllib.request, urllib.error
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 NOTION_VERSION = "2022-06-28"
@@ -86,6 +86,16 @@ def norm_status(v):
     return v if v in STATUSES else "Not started"
 
 
+# board Status/Priority (short) -> Notion option names (for push board -> Notion)
+STATUS_TO_NOTION = {"Not started": "Not started", "Review": "In progress", "Req Approved": "In progress",
+                    "In progress": "In progress", "On Hold": "Pending", "Blocked": "Pending",
+                    "Done": "Done", "Cancelled": "Cancel"}
+PRIO_TO_NOTION = {"Urgent": "Urgent : กระทบการดำเนินงานทันที / เสี่ยงเกิดความเสียหาย",
+                  "High": "High : กระทบการตัดสินใจ/งานเร่งด่วน",
+                  "Medium": "Medium : กระทบบางส่วนของงาน", "Low": "Low : ไม่กระทบการทำงาน"}
+RAW = {}  # id -> raw Notion values, used to push only genuinely-changed fields
+
+
 def notion_to_req(page):
     pr = page.get("properties", {})
     dept = p_select(pr.get("Request by Dep."))
@@ -94,6 +104,10 @@ def notion_to_req(page):
     ptitle = p_text(pr.get("Project Title"))
     wdesc = p_text(pr.get("Work description"))
     pid = page["id"].replace("-", "")
+    RAW[pid] = {"status": p_status(pr.get("Status")), "priority": p_select(pr.get("Priority")),
+                "Deadline": p_date(pr.get("Deadline")), "Start Date": p_date(pr.get("Start Date")),
+                "Complete Date": p_date(pr.get("Complete Date")), "Actual Date": p_date(pr.get("Actual Date")),
+                "note": p_text(pr.get("Note (รายละเอียด)"))}
     return {
         "id": pid,
         "url": "https://www.notion.so/" + pid,
@@ -156,6 +170,48 @@ def save_board(reqs):
     http("POST", f"{SB_URL}/rest/v1/board?on_conflict=id", headers, body)
 
 
+def push_to_notion(board):
+    """Push board-managed fields (status/priority/dates/note) back to Notion,
+    but only for items whose value actually differs from Notion right now."""
+    headers = {"Authorization": "Bearer " + NOTION_TOKEN, "Notion-Version": NOTION_VERSION,
+               "Content-Type": "application/json"}
+    pushed, CAP = 0, 80
+    for r in board:
+        raw = RAW.get(r["id"])
+        if raw is None:
+            continue  # not in the current Notion result set
+        props = {}
+        tgt_status = STATUS_TO_NOTION.get(r.get("status", ""), r.get("status", ""))
+        if tgt_status and tgt_status != raw["status"]:
+            props["Status"] = {"status": {"name": tgt_status}}
+        if r.get("prio"):
+            tgt_prio = PRIO_TO_NOTION.get(r["prio"], r["prio"])
+            if tgt_prio != raw["priority"]:
+                props["Priority"] = {"select": {"name": tgt_prio}}
+        for bkey, nkey in (("deadline", "Deadline"), ("startDate", "Start Date"),
+                           ("completed", "Complete Date"), ("actualDate", "Actual Date")):
+            bv = r.get(bkey, "") or ""
+            if bv != (raw[nkey] or ""):
+                props[nkey] = {"date": {"start": bv}} if bv else {"date": None}
+        bnote = r.get("note", "") or ""
+        if bnote != (raw["note"] or ""):
+            props["Note (รายละเอียด)"] = {"rich_text": [{"text": {"content": bnote[:1900]}}] if bnote else []}
+        if not props:
+            continue
+        try:
+            http("PATCH", f"https://api.notion.com/v1/pages/{r['id']}", headers, {"properties": props})
+            pushed += 1
+        except urllib.error.HTTPError as e:
+            print(f"  push {r['id']} failed: {e.code} {e.read().decode()[:200]}", file=sys.stderr)
+        except Exception as e:
+            print(f"  push {r['id']} err: {e}", file=sys.stderr)
+        time.sleep(0.34)  # stay under Notion's ~3 req/s limit
+        if pushed >= CAP:
+            print(f"  push cap {CAP} reached — rest syncs next run", file=sys.stderr)
+            break
+    return pushed
+
+
 def main():
     if not NOTION_TOKEN:
         print("ERROR: NOTION_TOKEN not set", file=sys.stderr)
@@ -181,7 +237,8 @@ def main():
             updated += 1
     merged = list(by_id.values())
     save_board(merged)
-    print(f"notion pull: {len(fresh)} from notion | +{added} new | ~{updated} refreshed | total {len(merged)}")
+    pushed = push_to_notion(merged)
+    print(f"pull: {len(fresh)} notion | +{added} new | ~{updated} refreshed | total {len(merged)} || push: {pushed} -> notion")
 
 
 if __name__ == "__main__":

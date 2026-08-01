@@ -1,7 +1,8 @@
-name: Notion → Board sync
+name: Notion ⇄ Board sync
 
-# Pulls new/updated requests from Notion into the Supabase board every 10 minutes.
-# Board-managed edits (status/owner/dates/note) are preserved — see sync_notion.py.
+# Every 10 min: pull new/updated requests Notion -> board (descriptive fields),
+# and push board -> Notion (status/priority/dates/note edits, changed items only).
+# See sync_notion.py. Board is authoritative for workflow fields, Notion for descriptive.
 
 on:
   schedule:

@@ -267,7 +267,7 @@
   const SB_HEAD={apikey:SB_KEY,Authorization:"Bearer "+SB_KEY,"Content-Type":"application/json"};
   const BOARD_ID="req";
   const FN_URL=SB_URL+"/functions/v1/notion-sync";
-  const NOTION_SYNC=true; // push board edits -> Notion via edge function (set false to disable)
+  const NOTION_SYNC=false; // real-time push via edge function OFF — GitHub Actions cron handles board->Notion every 10 min
   const TKEY="em_req_theme";
   const OWNERS=["Shay","Tar","Ohm","Toto","Fahsai","Mew","Sine","Bow","Ploy","Ako"];
   const STATUS=["Not started","Review","Req Approved","In progress","On Hold","Blocked","Done","Cancelled"];
