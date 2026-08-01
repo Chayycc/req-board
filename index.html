@@ -167,6 +167,9 @@
   .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
   .seg button{font:inherit;font-size:.82rem;font-weight:700;border:0;background:transparent;color:var(--ink-soft);padding:6px 13px;border-radius:7px;cursor:pointer;transition:.15s}
   .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .req-btn{text-decoration:none;font-weight:700;border-color:color-mix(in srgb,var(--accent) 40%,var(--line));color:var(--accent-ink);background:var(--accent-soft)}
+  .req-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .scope-tag{font-family:var(--mono);font-size:.7rem;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:99px;padding:2px 10px}
   #view-planning[hidden]{display:none}
   .plan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin-top:6px}
   .ocard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:15px 16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px}
@@ -202,6 +205,7 @@
       <button id="pg-board" aria-pressed="true">🗂️ บอร์ด</button>
       <button id="pg-plan" aria-pressed="false">👥 Planning</button>
     </div>
+    <a class="ghost req-btn" href="https://tally.so/r/nG9gLZ" target="_blank" rel="noopener" title="เปิดฟอร์มขอ Data Request">📝 ขอ Req</a>
     <input id="search" class="search" type="search" placeholder="ค้นหา ชื่อ/เรื่อง/แผนก…" aria-label="ค้นหา"/>
     <span id="synctag" class="synctag sync">…</span>
     <button id="refresh" class="ghost" title="ดึงงานใหม่จาก Notion export (merge)">↻ Sync</button>
@@ -237,7 +241,7 @@
   </section>
 
   <section class="zone">
-    <div class="zlab"><span class="ic">✅</span><h2>เสร็จแล้ว — แยกตามฝ่าย</h2><span class="cnt" id="done-cnt" style="color:var(--st-done);background:color-mix(in srgb,var(--st-done) 15%,transparent)">0</span><span class="hint">งาน Done จัดกลุ่มตามฝ่ายที่ขอ (ฝ่ายที่ปิดเยอะสุดก่อน) · ลากการ์ดลงกล่องนี้ = ปิดงาน</span></div>
+    <div class="zlab"><span class="ic">✅</span><h2>เสร็จแล้ว — แยกตามฝ่าย</h2><span class="cnt" id="done-cnt" style="color:var(--st-done);background:color-mix(in srgb,var(--st-done) 15%,transparent)">0</span><span class="scope-tag" id="done-scope">ทั้งหมด</span><span class="hint">นับตาม filter ปี/เดือน · จัดกลุ่มตามฝ่าย · ลากลงกล่องนี้ = ปิดงาน</span></div>
     <div class="board-wrap"><div class="board done" id="dboard"></div></div>
   </section>
   </div><!-- /view-board -->
@@ -298,6 +302,7 @@
   const reqYear=r=>{const d=reqDate(r);return d?d.slice(0,4):"";};
   const reqMonth=r=>{const d=reqDate(r);return d&&d.length>=7?String(+d.slice(5,7)):"";};
   const monthLabel=()=>{const ms=filt.months;if(!ms.length)return "ทุกเดือน";if(ms.length<=3)return ms.slice().sort((a,b)=>a-b).map(m=>MONTHS[m-1]).join(", ");return ms.length+" เดือน";};
+  const scopeLabel=()=>{const p=[];if(filt.year)p.push("ปี "+(+filt.year+543));if(filt.months.length)p.push(filt.months.slice().sort((a,b)=>a-b).map(m=>MONTHS[m-1]).join(", "));return p.length?p.join(" · "):"ทั้งหมด";};
 
   function dueMeta(o){
     if(o.status==="Done"||o.status==="Cancelled")return{cls:"",txt:o.completed?"✓ "+fmtD(o.completed):""};
@@ -526,6 +531,7 @@
     const cols=Object.keys(groups).sort((a,b)=>groups[b].length-groups[a].length)
       .map(d=>({dim:"done",k:d,label:d,color:"--st-done",items:groups[d]}));
     $("#done-cnt").textContent=base.length;
+    $("#done-scope").textContent=scopeLabel();
     if(!cols.length){$("#dboard").innerHTML='<div class="empty" style="flex:1">— ยังไม่มีงานเสร็จ —</div>';return;}
     renderBoard($("#dboard"),cols);
   }
