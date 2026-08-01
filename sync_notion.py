@@ -111,6 +111,10 @@ OWNER_TO_NOTION = {
     "Ako": "1a0d872b-594c-8111-a55a-00025fc247d3",    # Ako Pakawadee
     "Ploy": "9c4284c9-ad55-4ac3-89cb-6ecc40cf9c06",   # Ploy M
 }
+# reverse: Notion user id -> board nickname (pull owner Notion -> board).
+# IDs not listed here (external/requester) resolve to "" = board stays blank.
+NOTION_TO_OWNER = {v: k for k, v in OWNER_TO_NOTION.items()}
+NOTION_TO_OWNER["156d872b-594c-811c-88dd-00026eedf78e"] = "Tar"  # 2nd Patiwat Kunpijit account -> Tar (canonical fb6f5ef3 on push)
 RAW = {}  # id -> raw Notion values, used to push only genuinely-changed fields
 
 
@@ -126,6 +130,7 @@ def notion_to_req(page):
                 "Deadline": p_date(pr.get("Deadline")), "Start Date": p_date(pr.get("Start Date")),
                 "Complete Date": p_date(pr.get("Complete Date")), "Actual Date": p_date(pr.get("Actual Date")),
                 "note": p_text(pr.get("Note (รายละเอียด)")), "people": p_people(pr.get("Project Owner"))}
+    owner = next((NOTION_TO_OWNER[u] for u in RAW[pid]["people"] if u in NOTION_TO_OWNER), "")
     return {
         "id": pid,
         "url": "https://www.notion.so/" + pid,
@@ -150,7 +155,7 @@ def notion_to_req(page):
         "actualDate": p_date(pr.get("Actual Date")),
         "submitted": p_date(pr.get("Submitted date")),
         "created": page.get("created_time", ""),
-        "owner": "",
+        "owner": owner,
     }
 
 
@@ -255,6 +260,8 @@ def main():
         for k in BACKFILL:
             if not e.get(k) and s.get(k):
                 e[k] = s[k]; changed = True
+        if not e.get("owner") and s.get("owner"):  # board empty -> adopt Notion owner; once set, board wins
+            e["owner"] = s["owner"]; changed = True
         if changed:
             updated += 1
     merged = list(by_id.values())
