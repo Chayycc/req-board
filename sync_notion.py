@@ -10,7 +10,7 @@ only when empty; brand-new Notion rows are added.
 Env:
   NOTION_TOKEN   Notion internal integration secret (required)
 """
-import json, os, re, sys, urllib.request, urllib.error
+import json, os, re, sys, urllib.request
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 NOTION_VERSION = "2022-06-28"
@@ -141,8 +141,8 @@ def fetch_notion():
 
 
 def load_board():
-    st, rows = http("GET", f"{SB_URL}/rest/v1/board?id=eq.{BOARD_ID}&select=data",
-                    {"apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY})
+    _, rows = http("GET", f"{SB_URL}/rest/v1/board?id=eq.{BOARD_ID}&select=data",
+                   {"apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY})
     if rows and rows[0].get("data") and isinstance(rows[0]["data"].get("reqs"), list):
         return rows[0]["data"]["reqs"]
     return []
