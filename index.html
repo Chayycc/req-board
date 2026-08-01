@@ -266,6 +266,8 @@
   const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0aWNzdWpiZG96cW1qeWlvaHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTg0NzksImV4cCI6MjEwMDQ3NDQ3OX0.sXpsoHkXh8Exwb4Ep2H25PuVLNrw7GUlJNcnyzPb6hk";
   const SB_HEAD={apikey:SB_KEY,Authorization:"Bearer "+SB_KEY,"Content-Type":"application/json"};
   const BOARD_ID="req";
+  const FN_URL=SB_URL+"/functions/v1/notion-sync";
+  const NOTION_SYNC=true; // push board edits -> Notion via edge function (set false to disable)
   const TKEY="em_req_theme";
   const OWNERS=["Shay","Tar","Ohm","Toto","Fahsai","Mew","Sine","Bow","Ploy","Ako"];
   const STATUS=["Not started","Review","Req Approved","In progress","On Hold","Blocked","Done","Cancelled"];
@@ -353,6 +355,15 @@
     }catch(e){console.error("sbSave failed",e);sbOK=false;setSync("err");if(notifySaved){toast("บันทึกไม่สำเร็จ ⚠️");notifySaved=false;}}
   }
   function queueSave(){notifySaved=true;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,500);}
+  const notionTimers={};
+  function queueNotion(r){if(!NOTION_SYNC||!r||!/^[0-9a-f]{32}$/i.test(r.id))return;clearTimeout(notionTimers[r.id]);notionTimers[r.id]=setTimeout(()=>pushNotion(r),900);}
+  async function pushNotion(r){
+    try{
+      const fields={status:r.status,priority:r.prio,deadline:r.deadline,startDate:r.startDate,completeDate:r.completed,actualDate:r.actualDate,note:r.note};
+      const res=await fetch(FN_URL,{method:"POST",headers:{apikey:SB_KEY,Authorization:"Bearer "+SB_KEY,"Content-Type":"application/json"},body:JSON.stringify({id:r.id,fields})});
+      if(!res.ok){console.warn("notion-sync",res.status,await res.text().catch(()=>""));}
+    }catch(e){console.warn("notion-sync err",e);}
+  }
   function adopt(row){if(!row||!row.data||!Array.isArray(row.data.reqs))return false;reqs=normalize(row.data.reqs);lastSeen=row.updated_at;return true;}
 
   async function boot(){
@@ -536,8 +547,8 @@
         const id=e.dataTransfer.getData("text/plain");const r=byId(id);if(!r)return;
         const dim=z.dataset.dim,col=z.dataset.col||"";
         if(dim==="queue"){r.stage="queue";}
-        else if(dim==="status"){r.stage="board";r.status=col;}
-        else if(dim==="done"){r.stage="board";r.status="Done";}
+        else if(dim==="status"){r.stage="board";r.status=col;queueNotion(r);}
+        else if(dim==="done"){r.stage="board";r.status="Done";queueNotion(r);}
         render();queueSave();
       });
     });
@@ -584,7 +595,7 @@
       <a class="lk ${wl?"":"off"}" href="${wl||"#"}" target="_blank" rel="noopener">📄 ไฟล์งานที่ทำ</a>
       <a class="lk ${fl?"":"off"}" href="${fl||"#"}" target="_blank" rel="noopener">📎 ไฟล์แนบจาก request form</a>
       <a class="lk" href="${esc(notionUrl)}" target="_blank" rel="noopener">↗ เปิดใน Notion (ต้นฉบับ)</a>`;
-    const bind=(s,f)=>{const el=$(s);el&&el.addEventListener("change",e=>{const o=byId(id);if(!o)return;f(o,e.target.value);render();queueSave();});};
+    const bind=(s,f)=>{const el=$(s);el&&el.addEventListener("change",e=>{const o=byId(id);if(!o)return;f(o,e.target.value);render();queueSave();queueNotion(o);});};
     bind("#d-status",(o,v)=>{o.status=v;if(o.stage!=="board")o.stage="board";});
     bind("#d-prio",(o,v)=>o.prio=v);
     bind("#d-owner",(o,v)=>o.owner=v);
@@ -593,7 +604,7 @@
     bind("#d-complete",(o,v)=>o.completed=v);
     bind("#d-actual",(o,v)=>o.actualDate=v);
     document.querySelectorAll("#dw-body [data-stage]").forEach(b=>b.addEventListener("click",()=>{const o=byId(id);if(!o)return;o.stage=b.dataset.stage;openDrawer(id);render();queueSave();}));
-    const nt=$("#d-note");nt&&nt.addEventListener("input",e=>{const o=byId(id);if(o)o.note=e.target.value;notifySaved=true;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,700);});
+    const nt=$("#d-note");nt&&nt.addEventListener("input",e=>{const o=byId(id);if(o){o.note=e.target.value;queueNotion(o);}notifySaved=true;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,700);});
     $("#scrim").classList.add("show");$("#drawer").classList.add("open");drawerOpen=true;
   }
   function closeDrawer(){$("#scrim").classList.remove("show");$("#drawer").classList.remove("open");drawerOpen=false;}
