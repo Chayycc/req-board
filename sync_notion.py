@@ -74,6 +74,10 @@ def p_url(p):
     return (p or {}).get("url") or ""
 
 
+def p_people(p):
+    return [u.get("id", "") for u in (p or {}).get("people", [])]
+
+
 def norm_prio(v):
     head = re.split(r"[:：]", v or "")[0].strip()
     head = head.split()[0] if head else ""
@@ -93,6 +97,15 @@ STATUS_TO_NOTION = {"Not started": "Not started", "Review": "In progress", "Req 
 PRIO_TO_NOTION = {"Urgent": "Urgent : กระทบการดำเนินงานทันที / เสี่ยงเกิดความเสียหาย",
                   "High": "High : กระทบการตัดสินใจ/งานเร่งด่วน",
                   "Medium": "Medium : กระทบบางส่วนของงาน", "Low": "Low : ไม่กระทบการทำงาน"}
+# board owner (nickname) -> Notion user id (person field "Project Owner").
+# Unmapped owners stay board-only (never pushed). Add the rest as they are confirmed:
+# Tar / Toto / Fahsai / Mew / Sine / Bow
+OWNER_TO_NOTION = {
+    "Shay": "63a73367-6806-45d5-805e-08c752ee875b",   # Sivatep Petcharat
+    "Ohm": "67833646-7266-43ba-a9eb-c40dfe441945",    # Ohm
+    "Ako": "1a0d872b-594c-8111-a55a-00025fc247d3",    # Ako Pakawadee
+    "Ploy": "9c4284c9-ad55-4ac3-89cb-6ecc40cf9c06",   # Ploy M
+}
 RAW = {}  # id -> raw Notion values, used to push only genuinely-changed fields
 
 
@@ -107,7 +120,7 @@ def notion_to_req(page):
     RAW[pid] = {"status": p_status(pr.get("Status")), "priority": p_select(pr.get("Priority")),
                 "Deadline": p_date(pr.get("Deadline")), "Start Date": p_date(pr.get("Start Date")),
                 "Complete Date": p_date(pr.get("Complete Date")), "Actual Date": p_date(pr.get("Actual Date")),
-                "note": p_text(pr.get("Note (รายละเอียด)"))}
+                "note": p_text(pr.get("Note (รายละเอียด)")), "people": p_people(pr.get("Project Owner"))}
     return {
         "id": pid,
         "url": "https://www.notion.so/" + pid,
@@ -196,6 +209,10 @@ def push_to_notion(board):
         bnote = r.get("note", "") or ""
         if bnote != (raw["note"] or ""):
             props["Note (รายละเอียด)"] = {"rich_text": [{"text": {"content": bnote[:1900]}}] if bnote else []}
+        own = r.get("owner", "")
+        uid = OWNER_TO_NOTION.get(own)
+        if own and uid and raw.get("people") != [uid]:  # only push mapped, non-empty, changed owner
+            props["Project Owner"] = {"people": [{"id": uid}]}
         if not props:
             continue
         try:
