@@ -162,6 +162,21 @@
   .lk{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--accent-ink);text-decoration:none;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:9px;padding:8px 11px;word-break:break-all}
   .lk.off{opacity:.4;pointer-events:none}
   .divlab{font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:800;border-top:1px solid var(--line);padding-top:12px}
+  .cmt-list{display:flex;flex-direction:column;gap:8px;max-height:230px;overflow-y:auto;margin-bottom:8px}
+  .cmt{display:flex;gap:8px}
+  .cmt .av{width:24px;height:24px;flex:none;font-size:.6rem}
+  .cmt-body{flex:1;min-width:0;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:6px 9px}
+  .cmt-h{display:flex;align-items:center;gap:7px;margin-bottom:2px}
+  .cmt-h b{font-size:.76rem}
+  .cmt-t{font-family:var(--mono);font-size:.62rem;color:var(--ink-soft)}
+  .cmt-del{margin-left:auto;border:0;background:transparent;color:var(--ink-soft);cursor:pointer;font-size:1rem;line-height:1;padding:0 2px}
+  .cmt-del:hover{color:var(--hi)}
+  .cmt-tx{font-size:.82rem;white-space:pre-wrap;word-break:break-word}
+  .cmt-empty{font-size:.76rem;color:var(--ink-soft);text-align:center;padding:8px;border:1px dashed var(--line);border-radius:9px}
+  .cmt-add{display:flex;gap:6px}
+  .cmt-add select{flex:none;width:86px;font:inherit;font-size:.78rem;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 5px}
+  .cmt-add input{flex:1;min-width:0;font:inherit;font-size:.84rem;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:7px 9px}
+  .cmt-add input:focus{outline:2px solid var(--accent);border-color:var(--accent)}
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--paper);font-size:.8rem;font-weight:600;padding:9px 16px;border-radius:99px;opacity:0;pointer-events:none;transition:.25s;z-index:60}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
@@ -223,7 +238,6 @@
       <button type="button" id="f-month-btn" class="ghost" aria-haspopup="true" aria-expanded="false">ทุกเดือน ▾</button>
       <div class="ms-panel" id="f-month-panel" hidden></div>
     </div>
-    <button id="f-done" class="ghost" title="แสดง/ซ่อน คอลัมน์ Cancelled ในงานที่รับแล้ว">แสดง Cancelled</button>
     <button id="f-clear" class="ghost">ล้างตัวกรอง</button>
   </div>
 
@@ -286,7 +300,6 @@
 
   /* ---------- state ---------- */
   let reqs=[];
-  let showCancel=false;
   let page="board";
   const filt={cat:"",prio:"",dept:"",company:"",owner:"",year:"",months:[],q:""};
   const MONTHS=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
@@ -303,6 +316,14 @@
   const reqMonth=r=>{const d=reqDate(r);return d&&d.length>=7?String(+d.slice(5,7)):"";};
   const monthLabel=()=>{const ms=filt.months;if(!ms.length)return "ทุกเดือน";if(ms.length<=3)return ms.slice().sort((a,b)=>a-b).map(m=>MONTHS[m-1]).join(", ");return ms.length+" เดือน";};
   const scopeLabel=()=>{const p=[];if(filt.year)p.push("ปี "+(+filt.year+543));if(filt.months.length)p.push(filt.months.slice().sort((a,b)=>a-b).map(m=>MONTHS[m-1]).join(", "));return p.length?p.join(" · "):"ทั้งหมด";};
+  let lastCommenter="";
+  const flattenComments=cs=>(cs||[]).map(c=>`[${c.by||'ทีม'}] ${c.text}`).join("\n");
+  const fmtTime=at=>{if(!at)return"";const d=new Date(at);if(isNaN(d))return"";return d.getDate()+"/"+(d.getMonth()+1)+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+  function renderComments(r){
+    const box=$("#cmt-list");if(!box)return;const cs=r.comments||[];
+    box.innerHTML=cs.length?cs.map((c,i)=>`<div class="cmt"><span class="av" style="background:${c.by?avColor(c.by):'var(--surface-3)'};${c.by?'':'color:var(--ink-soft)'}">${esc(c.by?initials(c.by):'—')}</span><div class="cmt-body"><div class="cmt-h"><b>${esc(c.by||'ทีม')}</b>${c.at?`<span class="cmt-t">${esc(fmtTime(c.at))}</span>`:''}<button class="cmt-del" data-i="${i}" title="ลบ">×</button></div><div class="cmt-tx">${esc(c.text)}</div></div></div>`).join(""):'<div class="cmt-empty">— ยังไม่มีคอมเมนต์ —</div>';
+    box.querySelectorAll(".cmt-del").forEach(b=>b.addEventListener("click",()=>{r.comments.splice(+b.dataset.i,1);r.note=flattenComments(r.comments);renderComments(r);notifySaved=true;queueSave();queueNotion(r);}));
+  }
 
   function dueMeta(o){
     if(o.status==="Done"||o.status==="Cancelled")return{cls:"",txt:o.completed?"✓ "+fmtD(o.completed):""};
@@ -323,6 +344,8 @@
       let st=o.status||"Not started"; st=LEGACY[st]||st; if(STATUS.indexOf(st)<0)st="Not started";
       let stage=o.stage||(st==="Not started"?"queue":"board");
       if(stage!=="queue")stage="board"; // merged model: only queue | board (legacy "priority" -> board)
+      let comments=Array.isArray(o.comments)?o.comments:[];
+      if(!comments.length&&o.note)comments=[{by:"",text:o.note,at:""}]; // migrate old single note -> thread
       return {
         id:o.id,url:o.url||"",name:o.name||"(ไม่ระบุชื่อ)",status:st,stage,
         prio:PRIOS.indexOf(o.prio)>=0?o.prio:"",
@@ -331,7 +354,7 @@
         worklink:o.worklink||"",formlink:o.formlink||"",
         category:CATS.indexOf(o.category)>=0?o.category:"Data Request",
         deadline:o.deadline||"",startDate:o.startDate||"",completed:o.completed||"",actualDate:o.actualDate||"",submitted:o.submitted||"",created:o.created||"",
-        owner:o.owner||""
+        owner:o.owner||"",comments
       };
     });
   }
@@ -518,8 +541,7 @@
   }
 
   function renderStatusBoard(){
-    let ks=ACTIVE.slice();
-    if(showCancel)ks=ks.concat("Cancelled");
+    let ks=ACTIVE.concat("Cancelled");
     const base=reqs.filter(r=>r.stage==="board"&&match(r));
     const cols=ks.map(k=>({dim:"status",k,label:k,color:statColor(k),items:base.filter(r=>r.status===k)}));
     renderBoard($("#sboard"),cols);
@@ -593,7 +615,14 @@
         <div class="fld"><label>Actual date</label><input id="d-actual" type="date" value="${esc(r.actualDate)}"/></div>
         <div class="fld"><label>วันที่ขอ (request)</label><input type="date" value="${esc((r.submitted||'').slice(0,10))}" readonly/></div>
       </div>
-      <div class="fld"><label>Note (ภายในทีม)</label><textarea id="d-note" placeholder="บันทึกความคืบหน้า…">${esc(r.note)}</textarea></div>
+      <div class="fld"><label>💬 คอมเมนต์ทีม</label>
+        <div class="cmt-list" id="cmt-list"></div>
+        <div class="cmt-add">
+          <select id="cmt-by" aria-label="ทีมที่คอมเมนต์">${["<option value=''>ทีม…</option>",...OWNERS.map(o=>`<option value="${esc(o)}"${o===lastCommenter?" selected":""}>${esc(o)}</option>`)].join("")}</select>
+          <input id="cmt-text" type="text" placeholder="พิมพ์คอมเมนต์… (Enter ส่ง)" autocomplete="off"/>
+          <button id="cmt-send" class="acceptbtn" type="button">ส่ง</button>
+        </div>
+      </div>
       <div class="divlab">ข้อมูลจาก request</div>
       <div class="grid2"><div class="fld"><label>แผนก</label><div class="ro">${esc(r.dept||"—")}</div></div><div class="fld"><label>เครือบริษัท</label><div class="ro">${esc(r.company||"—")}</div></div></div>
       <div class="grid2"><div class="fld"><label>ประเภทงาน</label><div class="ro">${esc(r.type||"—")}</div></div><div class="fld"><label>Output</label><div class="ro">${esc(r.output||"—")}</div></div></div>
@@ -610,7 +639,10 @@
     bind("#d-complete",(o,v)=>o.completed=v);
     bind("#d-actual",(o,v)=>o.actualDate=v);
     document.querySelectorAll("#dw-body [data-stage]").forEach(b=>b.addEventListener("click",()=>{const o=byId(id);if(!o)return;o.stage=b.dataset.stage;openDrawer(id);render();queueSave();}));
-    const nt=$("#d-note");nt&&nt.addEventListener("input",e=>{const o=byId(id);if(o){o.note=e.target.value;queueNotion(o);}notifySaved=true;clearTimeout(pushTimer);pushTimer=setTimeout(sbSave,700);});
+    renderComments(r);
+    const addC=()=>{const o=byId(id);if(!o)return;const by=$("#cmt-by").value,tx=$("#cmt-text").value.trim();if(!tx)return;(o.comments=o.comments||[]).push({by,text:tx,at:new Date().toISOString()});o.note=flattenComments(o.comments);lastCommenter=by||lastCommenter;$("#cmt-text").value="";renderComments(o);notifySaved=true;queueSave();queueNotion(o);};
+    $("#cmt-send").addEventListener("click",addC);
+    $("#cmt-text").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addC();}});
     $("#scrim").classList.add("show");$("#drawer").classList.add("open");drawerOpen=true;
   }
   function closeDrawer(){$("#scrim").classList.remove("show");$("#drawer").classList.remove("open");drawerOpen=false;}
@@ -636,7 +668,6 @@
   $("#f-month-panel").addEventListener("click",e=>{const b=e.target.closest('[data-ms]');if(!b)return;filt.months=b.dataset.ms==="all"?MONTHS.map((m,i)=>String(i+1)):[];buildFilters();render();});
   document.addEventListener("click",e=>{if(!e.target.closest('#f-month-wrap')){const p=$("#f-month-panel");if(p&&!p.hidden){p.hidden=true;$("#f-month-btn").setAttribute("aria-expanded","false");}}});
   $("#search").addEventListener("input",e=>{filt.q=e.target.value.trim();render();});
-  $("#f-done").addEventListener("click",()=>{showCancel=!showCancel;$("#f-done").classList.toggle("on",showCancel);$("#f-done").textContent=showCancel?"ซ่อน Cancelled":"แสดง Cancelled";render();});
   $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.year=filt.q="";filt.months=[];$("#search").value="";buildFilters();render();});
   $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs);reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
   const curDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
