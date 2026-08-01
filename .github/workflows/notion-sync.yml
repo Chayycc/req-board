@@ -1,0 +1,26 @@
+name: Notion → Board sync
+
+# Pulls new/updated requests from Notion into the Supabase board every 10 minutes.
+# Board-managed edits (status/owner/dates/note) are preserved — see sync_notion.py.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may delay under load)
+  workflow_dispatch: {}        # allow manual run from the Actions tab
+
+concurrency:
+  group: notion-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pull Notion → Supabase
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: python sync_notion.py
