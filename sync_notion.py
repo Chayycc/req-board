@@ -100,6 +100,7 @@ PRIO_TO_NOTION = {"Urgent": "Urgent : กระทบการดำเนิน
 # board owner (nickname) -> Notion user id (person field "Project Owner").
 # Unmapped/empty owners are never pushed (board-only).
 OWNER_TO_NOTION = {
+    "Chay": "3f5a2fb4-57d1-4202-8a64-cd815201a268",   # Chay
     "Shay": "63a73367-6806-45d5-805e-08c752ee875b",   # Sivatep Petcharat
     "Tar": "fb6f5ef3-02c4-4139-a25c-298fc41696d5",    # Patiwat Kunpijit
     "Ohm": "67833646-7266-43ba-a9eb-c40dfe441945",    # Ohm
