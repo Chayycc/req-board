@@ -98,11 +98,16 @@ PRIO_TO_NOTION = {"Urgent": "Urgent : กระทบการดำเนิน
                   "High": "High : กระทบการตัดสินใจ/งานเร่งด่วน",
                   "Medium": "Medium : กระทบบางส่วนของงาน", "Low": "Low : ไม่กระทบการทำงาน"}
 # board owner (nickname) -> Notion user id (person field "Project Owner").
-# Unmapped owners stay board-only (never pushed). Add the rest as they are confirmed:
-# Tar / Toto / Fahsai / Mew / Sine / Bow
+# Unmapped/empty owners are never pushed (board-only).
 OWNER_TO_NOTION = {
     "Shay": "63a73367-6806-45d5-805e-08c752ee875b",   # Sivatep Petcharat
+    "Tar": "fb6f5ef3-02c4-4139-a25c-298fc41696d5",    # Patiwat Kunpijit
     "Ohm": "67833646-7266-43ba-a9eb-c40dfe441945",    # Ohm
+    "Toto": "a0a161ee-b691-4b15-9f06-fcefbbe8c71e",   # worapop wiboonsirichai
+    "Fahsai": "1b2d872b-594c-812d-9dcf-0002fcbb4441", # Rattanaporn Chaipanya
+    "Mew": "054f9bd7-c494-41d4-b995-3cfb6f3d8c5e",    # Nutcha Suteesukprasert
+    "Sine": "55e1a95e-0c89-423c-beeb-c448deb9ebd2",   # Sureeporn Sukaram
+    "Bow": "74704f1f-ad55-4531-9b66-d14a7e28c86b",    # Kanya Meekaew
     "Ako": "1a0d872b-594c-8111-a55a-00025fc247d3",    # Ako Pakawadee
     "Ploy": "9c4284c9-ad55-4ac3-89cb-6ecc40cf9c06",   # Ploy M
 }
