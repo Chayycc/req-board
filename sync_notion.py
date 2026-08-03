@@ -1,32 +1,42 @@
 #!/usr/bin/env python3
-"""Pull the Notion "Tally requirement" DB (Data Request + Issue) and merge into
-the Supabase board row (id='req'), preserving board-managed edits.
+"""Bidirectional sync between Notion and the Supabase board rows.
 
-Runs on a schedule (GitHub Actions, every 10 min). Direction: Notion -> board.
+Two independent board datasets are synced each run:
+  • main     — Notion "Tally requirement" (Data Request + Issue)  ->  row id='req'
+  • internal — Notion "Data_Internal Request"                     ->  row id='req-internal'
+
+Direction per dataset: pull (Notion -> board) + push (board -> Notion).
 Board-managed fields (status/stage/owner/prio/deadline/note) are NEVER overwritten
 for existing rows; descriptive fields are refreshed; date fields are backfilled
-only when empty; brand-new Notion rows are added.
+only when empty; brand-new Notion rows are added. Runs on GitHub Actions (10 min).
 
 Env:
-  NOTION_TOKEN   Notion internal integration secret (required)
+  NOTION_TOKEN   Notion internal integration secret (required, must have access to BOTH DBs)
 """
 import json, os, re, sys, time, urllib.request, urllib.error
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 NOTION_VERSION = "2022-06-28"
+
+# ----- main DB (Tally requirement) -----
 DB_ID = "817d901464a84f24bffe480ed2158983"
 CATEGORIES = ["ต้องการขอ Data Request ", "แจ้งปัญหารายงาน/การใช้งานข้อมูล"]
+CAT_MAP = {"ต้องการขอ Data Request ": "Data Request",
+           "ต้องการขอ Data Request": "Data Request",
+           "แจ้งปัญหารายงาน/การใช้งานข้อมูล": "Data Issue"}
+
+# ----- internal DB (Data_Internal Request) -----
+INT_DB_ID = "2b68fd87ee6e804f88f8f252850ed099"
+# Member Assign (Thai nickname select) -> board nickname. Fallback owner when Project Owner (person) is empty.
+MEMBER_TO_OWNER = {"เอโกะ": "Ako", "ฟ้าใส": "Fahsai", "โอม": "Ohm",
+                   "โตโต้": "Toto", "หมิว": "Mew", "เช่": "Shay"}
 
 # Supabase (anon key is public — same as the board page)
 SB_URL = "https://rticsujbdozqmjyiohvm.supabase.co"
 SB_KEY = ("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6"
           "InJ0aWNzdWpiZG96cW1qeWlvaHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTg0Nzks"
           "ImV4cCI6MjEwMDQ3NDQ3OX0.sXpsoHkXh8Exwb4Ep2H25PuVLNrw7GUlJNcnyzPb6hk")
-BOARD_ID = "req"
 
-CAT_MAP = {"ต้องการขอ Data Request ": "Data Request",
-           "ต้องการขอ Data Request": "Data Request",
-           "แจ้งปัญหารายงาน/การใช้งานข้อมูล": "Data Issue"}
 LEGACY = {"Pending": "Review", "Cancel": "Cancelled", "Task Approved": "Req Approved",
           "Approved": "Req Approved", "UAT": "Review"}
 STATUSES = {"Not started", "Review", "Req Approved", "In progress", "On Hold", "Blocked", "Done", "Cancelled"}
@@ -90,14 +100,7 @@ def norm_status(v):
     return v if v in STATUSES else "Not started"
 
 
-# board Status/Priority (short) -> Notion option names (for push board -> Notion)
-STATUS_TO_NOTION = {"Not started": "Not started", "Review": "In progress", "Req Approved": "In progress",
-                    "In progress": "In progress", "On Hold": "Pending", "Blocked": "Pending",
-                    "Done": "Done", "Cancelled": "Cancel"}
-PRIO_TO_NOTION = {"Urgent": "Urgent : กระทบการดำเนินงานทันที / เสี่ยงเกิดความเสียหาย",
-                  "High": "High : กระทบการตัดสินใจ/งานเร่งด่วน",
-                  "Medium": "Medium : กระทบบางส่วนของงาน", "Low": "Low : ไม่กระทบการทำงาน"}
-# board owner (nickname) -> Notion user id (person field "Project Owner").
+# board owner (nickname) -> Notion user id (person field "Project Owner"). Shared by both DBs.
 # Unmapped/empty owners are never pushed (board-only).
 OWNER_TO_NOTION = {
     "Chay": "3f5a2fb4-57d1-4202-8a64-cd815201a268",   # Chay
@@ -116,10 +119,25 @@ OWNER_TO_NOTION = {
 # IDs not listed here (external/requester) resolve to "" = board stays blank.
 NOTION_TO_OWNER = {v: k for k, v in OWNER_TO_NOTION.items()}
 NOTION_TO_OWNER["156d872b-594c-811c-88dd-00026eedf78e"] = "Tar"  # 2nd Patiwat Kunpijit account -> Tar (canonical fb6f5ef3 on push)
+
+# board Status/Priority (short) -> Notion option names (for push board -> Notion)
+STATUS_TO_NOTION = {"Not started": "Not started", "Review": "In progress", "Req Approved": "In progress",
+                    "In progress": "In progress", "On Hold": "Pending", "Blocked": "Pending",
+                    "Done": "Done", "Cancelled": "Cancel"}
+PRIO_TO_NOTION = {"Urgent": "Urgent : กระทบการดำเนินงานทันที / เสี่ยงเกิดความเสียหาย",
+                  "High": "High : กระทบการตัดสินใจ/งานเร่งด่วน",
+                  "Medium": "Medium : กระทบบางส่วนของงาน", "Low": "Low : ไม่กระทบการทำงาน"}
+# internal DB has only 4 statuses (Not started/Pending/In progress/Done) and plain priority options.
+# Cancelled has no home in the internal DB -> None = skip pushing status.
+INT_STATUS_TO_NOTION = {"Not started": "Not started", "Review": "In progress", "Req Approved": "In progress",
+                        "In progress": "In progress", "On Hold": "Pending", "Blocked": "Pending",
+                        "Done": "Done", "Cancelled": None}
+INT_PRIO_TO_NOTION = {"Urgent": "Urgent", "High": "High", "Medium": "Medium", "Low": "Low"}
+
 RAW = {}  # id -> raw Notion values, used to push only genuinely-changed fields
 
 
-def notion_to_req(page):
+def notion_to_req_main(page):
     pr = page.get("properties", {})
     dept = p_select(pr.get("Request by Dep."))
     title = p_title(pr.get("Request by Name"))
@@ -160,17 +178,83 @@ def notion_to_req(page):
     }
 
 
-def fetch_notion():
+def notion_to_req_internal(page):
+    pr = page.get("properties", {})
+    st = norm_status(p_status(pr.get("Status")))
+    ptitle = p_title(pr.get("Project Title"))
+    detail = p_text(pr.get("Project/Task Detail"))
+    company = p_select(pr.get("เครือบริษัท"))
+    submitter = p_select(pr.get("Submitted by"))
+    pid = page["id"].replace("-", "")
+    RAW[pid] = {"status": p_status(pr.get("Status")), "priority": p_select(pr.get("Priority ")),
+                "Due dates ": p_date(pr.get("Due dates ")), "Start Date": p_date(pr.get("Start Date")),
+                "Complete Date": p_date(pr.get("Complete Date")),
+                "note": "", "people": p_people(pr.get("Project Owner"))}
+    # owner: Project Owner (person) first, then Member Assign (Thai nickname) fallback
+    owner = next((NOTION_TO_OWNER[u] for u in RAW[pid]["people"] if u in NOTION_TO_OWNER), "")
+    if not owner:
+        owner = MEMBER_TO_OWNER.get(p_select(pr.get("Member Assign")), "")
+    return {
+        "id": pid,
+        "url": "https://www.notion.so/" + pid,
+        "name": submitter or "(ไม่ระบุชื่อ)",
+        "status": st,
+        "stage": "queue" if st == "Not started" else "board",
+        "prio": norm_prio(p_select(pr.get("Priority "))),
+        "type": p_select(pr.get("Type of work ")),
+        "dept": company,          # internal has no department — group by company chain instead
+        "deptShort": company,
+        "company": company,
+        "output": "",
+        "title": ptitle or detail or "(ไม่มีหัวข้อ)",
+        "desc": detail,
+        "note": "",
+        "worklink": p_url(pr.get("Online Link")),
+        "formlink": "",
+        "category": "",           # internal has no Data Request/Issue category
+        "deadline": p_date(pr.get("Due dates ")),
+        "startDate": p_date(pr.get("Start Date")),
+        "completed": p_date(pr.get("Complete Date")),
+        "actualDate": "",         # internal DB has no Actual Date field
+        "submitted": "",          # no submitted-date field; created_time drives year/month filter
+        "created": page.get("created_time", ""),
+        "owner": owner,
+    }
+
+
+# ---------- per-dataset config ----------
+CONFIGS = [
+    {"name": "main", "db": DB_ID, "board_id": "req",
+     "filter": {"or": [{"property": "เรื่องที่ต้องการ Data", "select": {"equals": c}} for c in CATEGORIES]},
+     "to_req": notion_to_req_main,
+     "status_prop": "Status", "prio_prop": "Priority",
+     "status_map": STATUS_TO_NOTION, "prio_map": PRIO_TO_NOTION,
+     "date_fields": [("deadline", "Deadline"), ("startDate", "Start Date"),
+                     ("completed", "Complete Date"), ("actualDate", "Actual Date")],
+     "note_prop": "Note (รายละเอียด)"},
+    {"name": "internal", "db": INT_DB_ID, "board_id": "req-internal",
+     "filter": None,
+     "to_req": notion_to_req_internal,
+     "status_prop": "Status", "prio_prop": "Priority ",
+     "status_map": INT_STATUS_TO_NOTION, "prio_map": INT_PRIO_TO_NOTION,
+     "date_fields": [("deadline", "Due dates "), ("startDate", "Start Date"),
+                     ("completed", "Complete Date")],
+     "note_prop": None},
+]
+
+
+def fetch(cfg):
     headers = {"Authorization": "Bearer " + NOTION_TOKEN, "Notion-Version": NOTION_VERSION,
                "Content-Type": "application/json"}
-    flt = {"or": [{"property": "เรื่องที่ต้องการ Data", "select": {"equals": c}} for c in CATEGORIES]}
     out, cursor = [], None
     while True:
-        body = {"filter": flt, "page_size": 100}
+        body = {"page_size": 100}
+        if cfg["filter"]:
+            body["filter"] = cfg["filter"]
         if cursor:
             body["start_cursor"] = cursor
-        _, res = http("POST", f"https://api.notion.com/v1/databases/{DB_ID}/query", headers, body)
-        out.extend(notion_to_req(pg) for pg in res.get("results", []))
+        _, res = http("POST", f"https://api.notion.com/v1/databases/{cfg['db']}/query", headers, body)
+        out.extend(cfg["to_req"](pg) for pg in res.get("results", []))
         if res.get("has_more"):
             cursor = res.get("next_cursor")
         else:
@@ -178,48 +262,48 @@ def fetch_notion():
     return out
 
 
-def load_board():
-    _, rows = http("GET", f"{SB_URL}/rest/v1/board?id=eq.{BOARD_ID}&select=data",
+def load_board(board_id):
+    _, rows = http("GET", f"{SB_URL}/rest/v1/board?id=eq.{board_id}&select=data",
                    {"apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY})
     if rows and rows[0].get("data") and isinstance(rows[0]["data"].get("reqs"), list):
         return rows[0]["data"]["reqs"]
     return []
 
 
-def save_board(reqs):
+def save_board(board_id, reqs):
     from datetime import datetime, timezone
-    body = [{"id": BOARD_ID, "data": {"reqs": reqs}, "updated_at": datetime.now(timezone.utc).isoformat()}]
+    body = [{"id": board_id, "data": {"reqs": reqs}, "updated_at": datetime.now(timezone.utc).isoformat()}]
     headers = {"apikey": SB_KEY, "Authorization": "Bearer " + SB_KEY, "Content-Type": "application/json",
                "Prefer": "resolution=merge-duplicates,return=minimal"}
     http("POST", f"{SB_URL}/rest/v1/board?on_conflict=id", headers, body)
 
 
-def push_to_notion(board):
-    """Push board-managed fields (status/priority/dates/note) back to Notion,
-    but only for items whose value actually differs from Notion right now."""
+def push_to_notion(cfg, board):
+    """Push board-managed fields back to Notion, only where the value actually differs."""
     headers = {"Authorization": "Bearer " + NOTION_TOKEN, "Notion-Version": NOTION_VERSION,
                "Content-Type": "application/json"}
+    smap, pmap = cfg["status_map"], cfg["prio_map"]
     pushed, CAP = 0, 80
     for r in board:
         raw = RAW.get(r["id"])
         if raw is None:
             continue  # not in the current Notion result set
         props = {}
-        tgt_status = STATUS_TO_NOTION.get(r.get("status", ""), r.get("status", ""))
+        tgt_status = smap.get(r.get("status", ""), r.get("status", ""))
         if tgt_status and tgt_status != raw["status"]:
-            props["Status"] = {"status": {"name": tgt_status}}
+            props[cfg["status_prop"]] = {"status": {"name": tgt_status}}
         if r.get("prio"):
-            tgt_prio = PRIO_TO_NOTION.get(r["prio"], r["prio"])
-            if tgt_prio != raw["priority"]:
-                props["Priority"] = {"select": {"name": tgt_prio}}
-        for bkey, nkey in (("deadline", "Deadline"), ("startDate", "Start Date"),
-                           ("completed", "Complete Date"), ("actualDate", "Actual Date")):
+            tgt_prio = pmap.get(r["prio"], r["prio"])
+            if tgt_prio and tgt_prio != raw["priority"]:
+                props[cfg["prio_prop"]] = {"select": {"name": tgt_prio}}
+        for bkey, nkey in cfg["date_fields"]:
             bv = r.get(bkey, "") or ""
-            if bv != (raw[nkey] or ""):
+            if bv != (raw.get(nkey) or ""):
                 props[nkey] = {"date": {"start": bv}} if bv else {"date": None}
-        bnote = r.get("note", "") or ""
-        if bnote != (raw["note"] or ""):
-            props["Note (รายละเอียด)"] = {"rich_text": [{"text": {"content": bnote[:1900]}}] if bnote else []}
+        if cfg["note_prop"]:
+            bnote = r.get("note", "") or ""
+            if bnote != (raw.get("note") or ""):
+                props[cfg["note_prop"]] = {"rich_text": [{"text": {"content": bnote[:1900]}}] if bnote else []}
         own = r.get("owner", "")
         uid = OWNER_TO_NOTION.get(own)
         if own and uid and raw.get("people") != [uid]:  # only push mapped, non-empty, changed owner
@@ -230,22 +314,19 @@ def push_to_notion(board):
             http("PATCH", f"https://api.notion.com/v1/pages/{r['id']}", headers, {"properties": props})
             pushed += 1
         except urllib.error.HTTPError as e:
-            print(f"  push {r['id']} failed: {e.code} {e.read().decode()[:200]}", file=sys.stderr)
+            print(f"  [{cfg['name']}] push {r['id']} failed: {e.code} {e.read().decode()[:200]}", file=sys.stderr)
         except Exception as e:
-            print(f"  push {r['id']} err: {e}", file=sys.stderr)
+            print(f"  [{cfg['name']}] push {r['id']} err: {e}", file=sys.stderr)
         time.sleep(0.34)  # stay under Notion's ~3 req/s limit
         if pushed >= CAP:
-            print(f"  push cap {CAP} reached — rest syncs next run", file=sys.stderr)
+            print(f"  [{cfg['name']}] push cap {CAP} reached — rest syncs next run", file=sys.stderr)
             break
     return pushed
 
 
-def main():
-    if not NOTION_TOKEN:
-        print("ERROR: NOTION_TOKEN not set", file=sys.stderr)
-        sys.exit(1)
-    fresh = fetch_notion()
-    board = load_board()
+def sync_one(cfg):
+    fresh = fetch(cfg)
+    board = load_board(cfg["board_id"])
     by_id = {r["id"]: r for r in board}
     added = updated = 0
     for s in fresh:
@@ -266,9 +347,28 @@ def main():
         if changed:
             updated += 1
     merged = list(by_id.values())
-    save_board(merged)
-    pushed = push_to_notion(merged)
-    print(f"pull: {len(fresh)} notion | +{added} new | ~{updated} refreshed | total {len(merged)} || push: {pushed} -> notion")
+    save_board(cfg["board_id"], merged)
+    pushed = push_to_notion(cfg, merged)
+    print(f"[{cfg['name']}] pull: {len(fresh)} notion | +{added} new | ~{updated} refreshed "
+          f"| total {len(merged)} || push: {pushed} -> notion")
+
+
+def main():
+    if not NOTION_TOKEN:
+        print("ERROR: NOTION_TOKEN not set", file=sys.stderr)
+        sys.exit(1)
+    for cfg in CONFIGS:
+        try:
+            sync_one(cfg)
+        except urllib.error.HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode()[:300]
+            except Exception:
+                pass
+            print(f"[{cfg['name']}] SYNC FAILED: {e.code} {body}", file=sys.stderr)
+        except Exception as e:
+            print(f"[{cfg['name']}] SYNC FAILED: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

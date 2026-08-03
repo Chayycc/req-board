@@ -217,7 +217,8 @@
     <div class="brand"><span class="kicker">Easy Money · Data</span><h1>Prioritization Board : Task</h1></div>
     <div class="spacer"></div>
     <div class="seg" role="tablist" aria-label="หน้า">
-      <button id="pg-board" aria-pressed="true">🗂️ บอร์ด</button>
+      <button id="pg-task" aria-pressed="true">🗂️ Task</button>
+      <button id="pg-internal" aria-pressed="false">🏢 Internal board</button>
       <button id="pg-plan" aria-pressed="false">👥 Planning</button>
     </div>
     <a class="ghost req-btn" href="https://tally.so/r/nG9gLZ" target="_blank" rel="noopener" title="เปิดฟอร์มขอ Data Request">📝 ขอ Req</a>
@@ -283,7 +284,6 @@
   const SB_URL="https://rticsujbdozqmjyiohvm.supabase.co";
   const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ0aWNzdWpiZG96cW1qeWlvaHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4OTg0NzksImV4cCI6MjEwMDQ3NDQ3OX0.sXpsoHkXh8Exwb4Ep2H25PuVLNrw7GUlJNcnyzPb6hk";
   const SB_HEAD={apikey:SB_KEY,Authorization:"Bearer "+SB_KEY,"Content-Type":"application/json"};
-  const BOARD_ID="req";
   const FN_URL=SB_URL+"/functions/v1/notion-sync";
   const NOTION_SYNC=false; // real-time push via edge function OFF — GitHub Actions cron handles board->Notion every 10 min
   const TKEY="em_req_theme";
@@ -299,11 +299,20 @@
   const prioRank=p=>({"Urgent":0,"High":1,"Medium":2,"Low":3}[p]??9);
 
   /* ---------- state ---------- */
-  let reqs=[];
-  let page="board";
-  const filt={cat:"",prio:"",dept:"",company:"",owner:"",year:"",months:[],q:""};
+  // two independent datasets (board rows), swapped in/out of the active working vars below
+  const mkFilt=()=>({cat:"",prio:"",dept:"",company:"",owner:"",year:"",months:[],q:""});
+  const SETS={
+    main:    {boardId:"req",          seedVar:"REQ_SEED",          reqs:[], lastSeen:null, filt:mkFilt()},
+    internal:{boardId:"req-internal", seedVar:"REQ_INTERNAL_SEED", reqs:[], lastSeen:null, filt:mkFilt()}
+  };
+  let activeSet="main";
+  let reqs=SETS.main.reqs;      // active working array (mirrors SETS[activeSet].reqs)
+  let filt=SETS.main.filt;      // active filter    (mirrors SETS[activeSet].filt)
+  let lastSeen=null;
+  let page="board";             // "board" | "planning"
+  const boardId=()=>SETS[activeSet].boardId;
   const MONTHS=["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-  let lastSeen=null, sbOK=false, pushTimer=null, drawerOpen=false, notifySaved=false;
+  let sbOK=false, pushTimer=null, drawerOpen=false, notifySaved=false;
 
   const $=s=>document.querySelector(s);
   const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -352,14 +361,14 @@
         type:o.type||"",dept:o.dept||"",deptShort:o.deptShort||"",company:o.company||"",
         output:o.output||"",title:o.title||o.desc||"(ไม่มีหัวข้อ)",desc:o.desc||"",note:o.note||"",
         worklink:o.worklink||"",formlink:o.formlink||"",
-        category:CATS.indexOf(o.category)>=0?o.category:"Data Request",
+        category:CATS.indexOf(o.category)>=0?o.category:"",
         deadline:o.deadline||"",startDate:o.startDate||"",completed:o.completed||"",actualDate:o.actualDate||"",submitted:o.submitted||"",created:o.created||"",
         owner:o.owner||"",comments
       };
     });
   }
-  function mergeSeed(cur){
-    const seed=normalize(window.REQ_SEED||[]);
+  function mergeSeed(cur,seedVar){
+    const seed=normalize(window[seedVar||"REQ_SEED"]||[]);
     const map={}; cur.forEach(r=>map[r.id]=r);
     let added=0;
     seed.forEach(s=>{
@@ -371,11 +380,11 @@
 
   /* ---------- supabase ---------- */
   function setSync(s){const el=$("#synctag");el.className="synctag "+s;el.textContent=s==="ok"?"● synced":s==="err"?"● offline":"syncing…";}
-  async function sbLoad(){const r=await fetch(SB_URL+"/rest/v1/board?id=eq."+BOARD_ID+"&select=data,updated_at",{headers:SB_HEAD});if(!r.ok)throw new Error("load "+r.status);const rows=await r.json();return rows[0]||null;}
+  async function sbLoad(){const r=await fetch(SB_URL+"/rest/v1/board?id=eq."+boardId()+"&select=data,updated_at",{headers:SB_HEAD});if(!r.ok)throw new Error("load "+r.status);const rows=await r.json();return rows[0]||null;}
   async function sbSave(){
     clearTimeout(pushTimer);pushTimer=null;
     try{
-      const body=[{id:BOARD_ID,data:{reqs},updated_at:new Date().toISOString()}];
+      const body=[{id:boardId(),data:{reqs},updated_at:new Date().toISOString()}];
       const r=await fetch(SB_URL+"/rest/v1/board?on_conflict=id",{method:"POST",headers:Object.assign({},SB_HEAD,{Prefer:"resolution=merge-duplicates,return=representation"}),body:JSON.stringify(body)});
       if(!r.ok)throw new Error("save "+r.status);
       const rows=await r.json();if(rows&&rows[0])lastSeen=rows[0].updated_at;
@@ -392,18 +401,41 @@
       if(!res.ok){console.warn("notion-sync",res.status,await res.text().catch(()=>""));}
     }catch(e){console.warn("notion-sync err",e);}
   }
-  function adopt(row){if(!row||!row.data||!Array.isArray(row.data.reqs))return false;reqs=normalize(row.data.reqs);lastSeen=row.updated_at;return true;}
+  function adopt(row){if(!row||!row.data||!Array.isArray(row.data.reqs))return false;reqs=SETS[activeSet].reqs=normalize(row.data.reqs);lastSeen=SETS[activeSet].lastSeen=row.updated_at;return true;}
+
+  // stash the active working vars back into their set, then load the requested set's vars
+  function switchSet(name){
+    if(name===activeSet)return;
+    SETS[activeSet].reqs=reqs;SETS[activeSet].lastSeen=lastSeen;SETS[activeSet].filt=filt;
+    activeSet=name;
+    reqs=SETS[name].reqs;lastSeen=SETS[name].lastSeen;filt=SETS[name].filt;
+  }
+
+  // load one dataset's Supabase row into its SETS store; fall back to embedded seed
+  async function loadSet(name){
+    const S=SETS[name];
+    try{
+      const r=await fetch(SB_URL+"/rest/v1/board?id=eq."+S.boardId+"&select=data,updated_at",{headers:SB_HEAD});
+      if(r.ok){sbOK=true;const rows=await r.json();const row=rows[0];
+        if(row&&row.data&&Array.isArray(row.data.reqs)){S.reqs=normalize(row.data.reqs);S.lastSeen=row.updated_at;return true;}
+        S.reqs=normalize(window[S.seedVar]||[]);return false;
+      }
+    }catch(e){}
+    S.reqs=normalize(window[S.seedVar]||[]);return false;
+  }
 
   async function boot(){
     setSync("sync");
-    let loaded=false;
-    try{const row=await sbLoad();if(row&&adopt(row))loaded=true;sbOK=true;}catch(e){sbOK=false;}
-    if(!loaded){reqs=normalize(window.REQ_SEED||[]);}
-    const m=mergeSeed(reqs);reqs=m.list;
+    const okMain=await loadSet("main");
+    await loadSet("internal");
+    // main only: merge embedded seed snapshot for brand-new items
+    const m=mergeSeed(SETS.main.reqs,"REQ_SEED");SETS.main.reqs=m.list;
+    // activate main
+    activeSet="main";reqs=SETS.main.reqs;filt=SETS.main.filt;lastSeen=SETS.main.lastSeen;
     setSync(sbOK?"ok":"err");
     buildFilters();render();
-    if(sbOK&&(!loaded||m.added))await sbSave();
-    // poll for remote changes — skip while user is editing (drawer open or a save pending) to avoid clobbering unsaved edits
+    if(sbOK&&(!okMain||m.added))await sbSave();
+    // poll the ACTIVE dataset for remote changes — skip while editing (drawer open / save pending)
     setInterval(async()=>{if(drawerOpen||pushTimer)return;try{const r=await sbLoad();if(r&&r.updated_at&&r.updated_at!==lastSeen){adopt(r);render();}}catch(e){}},15000);
   }
 
@@ -413,6 +445,7 @@
     const depts=[...new Set(reqs.map(r=>r.deptShort).filter(Boolean))].sort();
     const comps=[...new Set(reqs.map(r=>r.company).filter(Boolean))].sort();
     $("#f-cat").innerHTML=opt(CATS,filt.cat,"ทุกประเภท");
+    $("#f-cat").style.display=activeSet==="internal"?"none":""; // internal DB has no Data Request/Issue category
     $("#f-prio").innerHTML=opt(PRIOS,filt.prio,"ทุก Priority");
     $("#f-dept").innerHTML=opt(depts,filt.dept,"ทุกแผนก");
     $("#f-company").innerHTML=opt(comps,filt.company,"ทุกเครือ");
@@ -465,7 +498,17 @@
     $("#plan").innerHTML=html;
     $("#plan").querySelectorAll("[data-open]").forEach(el=>el.addEventListener("click",()=>openDrawer(el.dataset.open)));
   }
-  function setPage(p){page=p;$("#view-board").hidden=p!=="board";$("#view-planning").hidden=p!=="planning";$("#pg-board").setAttribute("aria-pressed",p==="board");$("#pg-plan").setAttribute("aria-pressed",p==="planning");}
+  // tab: "task" | "internal" | "planning". Task/Internal swap the dataset; Planning keeps the active one.
+  function go(tab){
+    if(tab==="task"||tab==="internal"){switchSet(tab==="task"?"main":"internal");page="board";}
+    else{page="planning";}
+    const onBoard=page==="board";
+    $("#view-board").hidden=!onBoard;$("#view-planning").hidden=onBoard;
+    $("#pg-task").setAttribute("aria-pressed",onBoard&&activeSet==="main");
+    $("#pg-internal").setAttribute("aria-pressed",onBoard&&activeSet==="internal");
+    $("#pg-plan").setAttribute("aria-pressed",page==="planning");
+    buildFilters();render();
+  }
 
   function renderKpis(){
     const all=reqs.filter(match);
@@ -652,8 +695,9 @@
   function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),1400);}
 
   /* ---------- events ---------- */
-  $("#pg-board").addEventListener("click",()=>setPage("board"));
-  $("#pg-plan").addEventListener("click",()=>setPage("planning"));
+  $("#pg-task").addEventListener("click",()=>go("task"));
+  $("#pg-internal").addEventListener("click",()=>go("internal"));
+  $("#pg-plan").addEventListener("click",()=>go("planning"));
   $("#dw-close").addEventListener("click",closeDrawer);
   $("#scrim").addEventListener("click",closeDrawer);
   document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDrawer();});
@@ -669,7 +713,7 @@
   document.addEventListener("click",e=>{if(!e.target.closest('#f-month-wrap')){const p=$("#f-month-panel");if(p&&!p.hidden){p.hidden=true;$("#f-month-btn").setAttribute("aria-expanded","false");}}});
   $("#search").addEventListener("input",e=>{filt.q=e.target.value.trim();render();});
   $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.year=filt.q="";filt.months=[];$("#search").value="";buildFilters();render();});
-  $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs);reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
+  $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs,SETS[activeSet].seedVar);reqs=SETS[activeSet].reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
   const curDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
   $("#theme").addEventListener("click",()=>{const nv=curDark()?"light":"dark";document.documentElement.dataset.theme=nv;try{localStorage.setItem(TKEY,nv);}catch(e){}});
   try{const t=localStorage.getItem(TKEY);if(t)document.documentElement.dataset.theme=t;}catch(e){}
