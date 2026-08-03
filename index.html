@@ -443,7 +443,9 @@
     activeSet="main";reqs=SETS.main.reqs;filt=SETS.main.filt;lastSeen=SETS.main.lastSeen;
     setSync(sbOK?"ok":"err");
     buildFilters();render();
-    if(sbOK&&(!okMain||m.added))await sbSave();
+    // persist only when the row loaded cleanly AND the seed contributed brand-new items.
+    // NEVER save on a failed/absent load — that would overwrite the real row with the smaller seed (cron owns population).
+    if(sbOK&&okMain&&m.added)await sbSave();
     // poll the ACTIVE dataset for remote changes — skip while editing (drawer open / save pending)
     setInterval(async()=>{if(drawerOpen||pushTimer)return;try{const r=await sbLoad();if(r&&r.updated_at&&r.updated_at!==lastSeen){adopt(r);render();}}catch(e){}},15000);
   }
