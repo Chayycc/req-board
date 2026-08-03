@@ -265,14 +265,14 @@
   </section>
 
   <section class="zone">
-    <div class="zlab"><span class="ic">✅</span><h2>เสร็จแล้ว — แยกตามฝ่าย</h2><span class="cnt" id="done-cnt" style="color:var(--st-done);background:color-mix(in srgb,var(--st-done) 15%,transparent)">0</span><span class="scope-tag" id="done-scope">ทั้งหมด</span><span class="hint">นับตาม filter ปี/เดือน · จัดกลุ่มตามฝ่าย · ลากลงกล่องนี้ = ปิดงาน</span></div>
+    <div class="zlab"><span class="ic">✅</span><h2 id="done-title">เสร็จแล้ว — แยกตามฝ่าย</h2><span class="cnt" id="done-cnt" style="color:var(--st-done);background:color-mix(in srgb,var(--st-done) 15%,transparent)">0</span><span class="scope-tag" id="done-scope">ทั้งหมด</span><span class="hint" id="done-hint">นับตาม filter ปี/เดือน · จัดกลุ่มตามฝ่าย · ลากลงกล่องนี้ = ปิดงาน</span></div>
     <div class="board-wrap"><div class="board done" id="dboard"></div></div>
   </section>
   </div><!-- /view-board -->
 
   <div id="view-planning" hidden>
     <section class="zone">
-      <div class="zlab"><span class="ic">👥</span><h2>Planning — Capacity / Workload</h2><span class="hint">งานที่แต่ละคนรับไป + สถานะที่ทำอยู่ · เรียงคนที่โหลดเยอะสุดก่อน · ใช้ filter เดือน/ปี/ฝ่าย สโคปได้</span></div>
+      <div class="zlab"><span class="ic">👥</span><h2>Planning — Capacity / Workload</h2><span class="hint">รวมทั้ง Task + Internal · งานที่แต่ละคนรับไป + สถานะที่ทำอยู่ · เรียงคนที่โหลดเยอะสุดก่อน · ใช้ filter เดือน/ปี สโคปได้</span></div>
       <div class="plan-grid" id="plan"></div>
     </section>
   </div>
@@ -481,7 +481,8 @@
   function render(){renderKpis();renderQueue();renderStatusBoard();renderDoneBoard();renderPlanning();wireDnD();}
 
   function renderPlanning(){
-    const base=reqs.filter(match);
+    // Planning spans BOTH datasets (Task + Internal) — combined team capacity/workload
+    const base=SETS.main.reqs.concat(SETS.internal.reqs).filter(match);
     const now=new Date();now.setHours(0,0,0,0);
     const active=base.filter(r=>r.stage==="board"&&!isDone(r));
     const rows=OWNERS.map(o=>{
@@ -599,13 +600,16 @@
     renderBoard($("#sboard"),cols);
   }
   function renderDoneBoard(){
+    const byType=activeSet==="internal"; // internal has no dept -> group Done by type of work
     const base=reqs.filter(r=>r.status==="Done"&&match(r));
     const groups={};
-    base.forEach(r=>{const d=r.deptShort||"อื่นๆ";(groups[d]=groups[d]||[]).push(r);});
+    base.forEach(r=>{const k=(byType?r.type:r.deptShort)||"อื่นๆ";(groups[k]=groups[k]||[]).push(r);});
     const cols=Object.keys(groups).sort((a,b)=>groups[b].length-groups[a].length)
       .map(d=>({dim:"done",k:d,label:d,color:"--st-done",items:groups[d]}));
     $("#done-cnt").textContent=base.length;
     $("#done-scope").textContent=scopeLabel();
+    $("#done-title").textContent=byType?"เสร็จแล้ว — แยกตามงาน":"เสร็จแล้ว — แยกตามฝ่าย";
+    $("#done-hint").textContent=byType?"นับตาม filter ปี/เดือน · จัดกลุ่มตามประเภทงาน · ลากลงกล่องนี้ = ปิดงาน":"นับตาม filter ปี/เดือน · จัดกลุ่มตามฝ่าย · ลากลงกล่องนี้ = ปิดงาน";
     if(!cols.length){$("#dboard").innerHTML='<div class="empty" style="flex:1">— ยังไม่มีงานเสร็จ —</div>';return;}
     renderBoard($("#dboard"),cols);
   }
