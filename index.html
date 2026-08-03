@@ -182,8 +182,11 @@
   .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
   .seg button{font:inherit;font-size:.82rem;font-weight:700;border:0;background:transparent;color:var(--ink-soft);padding:6px 13px;border-radius:7px;cursor:pointer;transition:.15s}
   .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
-  .req-btn{text-decoration:none;font-weight:700;border-color:color-mix(in srgb,var(--accent) 40%,var(--line));color:var(--accent-ink);background:var(--accent-soft)}
-  .req-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .req-btn{text-decoration:none;font-weight:700;border-color:color-mix(in srgb,var(--accent) 40%,var(--line));color:var(--accent-ink);background:var(--accent-soft);cursor:pointer}
+  .req-btn:hover,.req-btn[aria-expanded="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .req-menu{grid-template-columns:1fr;min-width:210px;left:auto;right:0;gap:2px}
+  .req-opt{display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:600;padding:9px 10px;border-radius:8px;color:var(--ink);text-decoration:none;white-space:nowrap}
+  .req-opt:hover{background:var(--accent-soft);color:var(--accent-ink)}
   .scope-tag{font-family:var(--mono);font-size:.7rem;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent);border-radius:99px;padding:2px 10px}
   #view-planning[hidden]{display:none}
   .plan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin-top:6px}
@@ -221,7 +224,13 @@
       <button id="pg-internal" aria-pressed="false">🏢 Internal board</button>
       <button id="pg-plan" aria-pressed="false">👥 Planning</button>
     </div>
-    <a class="ghost req-btn" href="https://tally.so/r/nG9gLZ" target="_blank" rel="noopener" title="เปิดฟอร์มขอ Data Request">📝 ขอ Req</a>
+    <div class="ms req-wrap">
+      <button type="button" id="req-btn" class="ghost req-btn" aria-haspopup="true" aria-expanded="false" title="เลือกฟอร์มของาน">📝 ขอ Req ▾</button>
+      <div class="ms-panel req-menu" id="req-menu" hidden>
+        <a class="req-opt" href="https://tally.so/r/nG9gLZ" target="_blank" rel="noopener">📄 ขอ Requirement</a>
+        <a class="req-opt" href="https://tally.so/r/LZD1Dv" target="_blank" rel="noopener">🏢 Internal Request</a>
+      </div>
+    </div>
     <input id="search" class="search" type="search" placeholder="ค้นหา ชื่อ/เรื่อง/แผนก…" aria-label="ค้นหา"/>
     <span id="synctag" class="synctag sync">…</span>
     <button id="refresh" class="ghost" title="ดึงงานใหม่จาก Notion export (merge)">↻ Sync</button>
@@ -711,6 +720,9 @@
   $("#f-month-panel").addEventListener("change",e=>{const t=e.target;if(!t.matches('input[type=checkbox]'))return;const v=t.value,i=filt.months.indexOf(v);if(t.checked){if(i<0)filt.months.push(v);}else if(i>=0)filt.months.splice(i,1);$("#f-month-btn").textContent=monthLabel()+" ▾";$("#f-month-btn").classList.toggle("on",filt.months.length>0);render();});
   $("#f-month-panel").addEventListener("click",e=>{const b=e.target.closest('[data-ms]');if(!b)return;filt.months=b.dataset.ms==="all"?MONTHS.map((m,i)=>String(i+1)):[];buildFilters();render();});
   document.addEventListener("click",e=>{if(!e.target.closest('#f-month-wrap')){const p=$("#f-month-panel");if(p&&!p.hidden){p.hidden=true;$("#f-month-btn").setAttribute("aria-expanded","false");}}});
+  $("#req-btn").addEventListener("click",e=>{e.stopPropagation();const p=$("#req-menu");p.hidden=!p.hidden;$("#req-btn").setAttribute("aria-expanded",String(!p.hidden));});
+  $("#req-menu").addEventListener("click",()=>{$("#req-menu").hidden=true;$("#req-btn").setAttribute("aria-expanded","false");});
+  document.addEventListener("click",e=>{if(!e.target.closest('.req-wrap')){const p=$("#req-menu");if(p&&!p.hidden){p.hidden=true;$("#req-btn").setAttribute("aria-expanded","false");}}});
   $("#search").addEventListener("input",e=>{filt.q=e.target.value.trim();render();});
   $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.year=filt.q="";filt.months=[];$("#search").value="";buildFilters();render();});
   $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs,SETS[activeSet].seedVar);reqs=SETS[activeSet].reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
