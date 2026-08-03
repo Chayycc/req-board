@@ -209,6 +209,11 @@
   .oc-row:hover{background:var(--surface-3)}
   .oc-row .rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .oc-row .rs{font-family:var(--mono);font-size:.6rem;font-weight:700;padding:1px 6px;border-radius:5px;white-space:nowrap}
+  .src{font-size:.58rem;font-weight:800;padding:1px 5px;border-radius:5px;white-space:nowrap;letter-spacing:.02em;flex:none}
+  .src.req{color:var(--accent-ink);background:var(--accent-soft)}
+  .src.int{color:#0e7490;background:color-mix(in srgb,#0e7490 16%,transparent)}
+  :root[data-theme="dark"] .src.int{color:#5fd3e6}
+  @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .src.int{color:#5fd3e6}}
   .oc-empty{font-size:.74rem;color:var(--ink-soft);text-align:center;padding:10px}
   @media(max-width:560px){.search{width:140px}}
 </style>
@@ -484,29 +489,37 @@
 
   function renderPlanning(){
     // Planning spans BOTH datasets (Task + Internal) — combined team capacity/workload
+    const intIds=new Set(SETS.internal.reqs.map(r=>r.id));
+    const isInt=r=>intIds.has(r.id); // main/internal Notion ids never collide
+    const srcTag=r=>isInt(r)?'<span class="src int" title="Internal Request">🏢 Int</span>':'<span class="src req" title="Data Request">🗂️ Req</span>';
     const base=SETS.main.reqs.concat(SETS.internal.reqs).filter(match);
     const now=new Date();now.setHours(0,0,0,0);
     const active=base.filter(r=>r.stage==="board"&&!isDone(r));
     const rows=OWNERS.map(o=>{
       const mine=active.filter(r=>r.owner===o);
-      return {owner:o,mine,overdue:mine.filter(r=>r.deadline&&new Date(r.deadline)<now).length,done:base.filter(r=>r.owner===o&&r.status==="Done").length};
+      const doneList=base.filter(r=>r.owner===o&&r.status==="Done");
+      return {owner:o,mine,doneList,overdue:mine.filter(r=>r.deadline&&new Date(r.deadline)<now).length};
     });
     const unassigned=active.filter(r=>!r.owner);
     const maxLoad=Math.max(1,...rows.map(r=>r.mine.length),unassigned.length);
-    const card=(name,mine,overdue,done,cls)=>{
+    const card=(name,mine,overdue,doneList,cls)=>{
       const byStat={};mine.forEach(t=>{byStat[t.status]=(byStat[t.status]||0)+1;});
       const chips=ACTIVE.filter(s=>byStat[s]).map(s=>`<span class="oc-stat"><span class="pd" style="background:var(${statColor(s)})"></span>${esc(s)} ${byStat[s]}</span>`).join("");
+      // source split across this person's whole scope (กำลังทำ + เสร็จ)
+      const all=mine.concat(doneList),nT=all.filter(r=>!isInt(r)).length,nI=all.filter(isInt).length;
+      const srcChips=`${nT?`<span class="oc-stat"><span class="src req">🗂️ Req</span>${nT}</span>`:""}${nI?`<span class="oc-stat"><span class="src int">🏢 Int</span>${nI}</span>`:""}`;
+      const done=doneList.length;
       const list=mine.slice().sort((a,b)=>prioRank(a.prio)-prioRank(b.prio)||(a.deadline||"9999").localeCompare(b.deadline||"9999"))
-        .map(t=>{const d=dueMeta(t);return `<div class="oc-row" data-open="${esc(t.id)}"><span class="pd" style="width:7px;height:7px;border-radius:99px;background:var(${statColor(t.status)});flex:none"></span><span class="rt">${esc(t.title)}</span>${t.prio?`<span class="rs" style="color:var(${prioColor(t.prio)})">${esc(t.prio[0])}</span>`:""}${d.txt?`<span class="rs ${d.cls}">${esc(d.txt)}</span>`:""}</div>`;}).join("")||'<div class="oc-empty">— ไม่มีงานที่กำลังทำ —</div>';
+        .map(t=>{const d=dueMeta(t);return `<div class="oc-row" data-open="${esc(t.id)}"><span class="pd" style="width:7px;height:7px;border-radius:99px;background:var(${statColor(t.status)});flex:none"></span>${srcTag(t)}<span class="rt">${esc(t.title)}</span>${t.prio?`<span class="rs" style="color:var(${prioColor(t.prio)})">${esc(t.prio[0])}</span>`:""}${d.txt?`<span class="rs ${d.cls}">${esc(d.txt)}</span>`:""}</div>`;}).join("")||'<div class="oc-empty">— ไม่มีงานที่กำลังทำ —</div>';
       return `<div class="ocard ${cls||""}">
         <div class="oc-h"><span class="av" style="background:${cls?"var(--md)":avColor(name)}">${esc(cls?"?":initials(name))}</span><span class="nm">${esc(name)}</span><span class="big"><b>${mine.length}</b><span>กำลังทำ</span></span></div>
         <div class="load"><i style="width:${Math.round(mine.length/maxLoad*100)}%"></i></div>
-        <div class="oc-stats">${chips||'<span class="oc-stat">— ว่าง —</span>'}${overdue?`<span class="oc-stat over">⚠ เลย ${overdue}</span>`:""}${done?`<span class="oc-stat"><span class="pd" style="background:var(--st-done)"></span>เสร็จ ${done}</span>`:""}</div>
+        <div class="oc-stats">${chips||'<span class="oc-stat">— ว่าง —</span>'}${overdue?`<span class="oc-stat over">⚠ เลย ${overdue}</span>`:""}${done?`<span class="oc-stat"><span class="pd" style="background:var(--st-done)"></span>เสร็จ ${done}</span>`:""}${srcChips}</div>
         <div class="oc-list">${list}</div>
       </div>`;
     };
-    let html=rows.sort((a,b)=>b.mine.length-a.mine.length).map(r=>card(r.owner,r.mine,r.overdue,r.done,"")).join("");
-    if(unassigned.length)html+=card("ยังไม่มอบหมาย",unassigned,unassigned.filter(r=>r.deadline&&new Date(r.deadline)<now).length,0,"unassigned");
+    let html=rows.sort((a,b)=>b.mine.length-a.mine.length||b.doneList.length-a.doneList.length).map(r=>card(r.owner,r.mine,r.overdue,r.doneList,"")).join("");
+    if(unassigned.length)html+=card("ยังไม่มอบหมาย",unassigned,unassigned.filter(r=>r.deadline&&new Date(r.deadline)<now).length,[],"unassigned");
     $("#plan").innerHTML=html;
     $("#plan").querySelectorAll("[data-open]").forEach(el=>el.addEventListener("click",()=>openDrawer(el.dataset.open)));
   }
