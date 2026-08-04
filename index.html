@@ -238,7 +238,7 @@
     </div>
     <input id="search" class="search" type="search" placeholder="ค้นหา ชื่อ/เรื่อง/แผนก…" aria-label="ค้นหา"/>
     <span id="synctag" class="synctag sync">…</span>
-    <button id="refresh" class="ghost" title="ดึงงานใหม่จาก Notion export (merge)">↻ Sync</button>
+    <button id="refresh" class="ghost" title="ดึงข้อมูลล่าสุดจาก Supabase (Task + Internal)">↻ Sync</button>
     <button id="theme" class="ghost icon" title="สลับธีม" aria-label="สลับธีม">◑</button>
   </header>
 
@@ -438,6 +438,22 @@
     S.reqs=normalize(window[S.seedVar]||[]);return false;
   }
 
+  // re-pull one dataset from Supabase and re-render if it changed (used on tab-switch + ↻ Sync + poll)
+  async function refreshSet(name){
+    const S=SETS[name];
+    try{
+      const r=await fetch(SB_URL+"/rest/v1/board?id=eq."+S.boardId+"&select=data,updated_at",{headers:SB_HEAD});
+      if(!r.ok)return false;
+      sbOK=true;const rows=await r.json();const row=rows[0];
+      if(row&&row.data&&Array.isArray(row.data.reqs)&&row.updated_at!==S.lastSeen){
+        S.reqs=normalize(row.data.reqs);S.lastSeen=row.updated_at;
+        if(name===activeSet){reqs=S.reqs;lastSeen=S.lastSeen;}
+        buildFilters();render();return true;
+      }
+    }catch(e){}
+    return false;
+  }
+
   async function boot(){
     setSync("sync");
     const okMain=await loadSet("main");
@@ -451,8 +467,8 @@
     // persist only when the row loaded cleanly AND the seed contributed brand-new items.
     // NEVER save on a failed/absent load — that would overwrite the real row with the smaller seed (cron owns population).
     if(sbOK&&okMain&&m.added)await sbSave();
-    // poll the ACTIVE dataset for remote changes — skip while editing (drawer open / save pending)
-    setInterval(async()=>{if(drawerOpen||pushTimer)return;try{const r=await sbLoad();if(r&&r.updated_at&&r.updated_at!==lastSeen){adopt(r);render();}}catch(e){}},15000);
+    // poll BOTH datasets for remote changes (Planning spans both) — skip while editing (drawer open / save pending)
+    setInterval(()=>{if(drawerOpen||pushTimer)return;refreshSet("main");refreshSet("internal");},15000);
   }
 
   /* ---------- filters ---------- */
@@ -533,6 +549,9 @@
     $("#pg-internal").setAttribute("aria-pressed",onBoard&&activeSet==="internal");
     $("#pg-plan").setAttribute("aria-pressed",page==="planning");
     buildFilters();render();
+    // pull the latest for what we're now viewing so newly-synced jobs show immediately
+    if(page==="planning"){refreshSet("main");refreshSet("internal");}
+    else{refreshSet(activeSet);}
   }
 
   function renderKpis(){
@@ -744,7 +763,14 @@
   document.addEventListener("click",e=>{if(!e.target.closest('.req-wrap')){const p=$("#req-menu");if(p&&!p.hidden){p.hidden=true;$("#req-btn").setAttribute("aria-expanded","false");}}});
   $("#search").addEventListener("input",e=>{filt.q=e.target.value.trim();render();});
   $("#f-clear").addEventListener("click",()=>{filt.cat=filt.prio=filt.dept=filt.company=filt.owner=filt.year=filt.q="";filt.months=[];$("#search").value="";buildFilters();render();});
-  $("#refresh").addEventListener("click",()=>{const m=mergeSeed(reqs,SETS[activeSet].seedVar);reqs=SETS[activeSet].reqs=m.list;buildFilters();render();queueSave();toast(m.added?("เพิ่มงานใหม่ "+m.added+" รายการ"):"ไม่มีงานใหม่");});
+  $("#refresh").addEventListener("click",async()=>{
+    setSync("sync");
+    const before=SETS.main.reqs.length+SETS.internal.reqs.length;
+    await Promise.all([refreshSet("main"),refreshSet("internal")]);
+    const after=SETS.main.reqs.length+SETS.internal.reqs.length,diff=after-before;
+    setSync(sbOK?"ok":"err");
+    toast(diff>0?("มีงานใหม่ "+diff+" รายการ"):"อัปเดตล่าสุดแล้ว");
+  });
   const curDark=()=>document.documentElement.dataset.theme?document.documentElement.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
   $("#theme").addEventListener("click",()=>{const nv=curDark()?"light":"dark";document.documentElement.dataset.theme=nv;try{localStorage.setItem(TKEY,nv);}catch(e){}});
   try{const t=localStorage.getItem(TKEY);if(t)document.documentElement.dataset.theme=t;}catch(e){}
