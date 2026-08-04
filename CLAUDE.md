@@ -6,7 +6,7 @@ Context สำหรับ Claude session ที่มาทำงานกั�
 
 ## คืออะไร
 
-บอร์ดจัดคิวงาน **Data Request / Data Issue** ของทีม Data — clone มาจาก [prio-board](https://chayycc.github.io/prio-board/) แต่ปรับให้แก้ status/owner ในบอร์ดได้เอง **ไม่ต้องเด้งไปหน้า Notion** และ **sync 2 ทางกับ Notion อัตโนมัติทุก 10 นาที**
+บอร์ดจัดคิวงาน **Data Request / Data Issue** ของทีม Data — clone มาจาก [prio-board](https://chayycc.github.io/prio-board/) แต่ปรับให้แก้ status/owner ในบอร์ดได้เอง **ไม่ต้องเด้งไปหน้า Notion** และ **sync 2 ทางกับ Notion อัตโนมัติทุก 5 นาที**
 
 - **Live:** https://chayycc.github.io/req-board/
 - **Repo:** github.com/Chayycc/req-board (GitHub Pages, public)
@@ -20,14 +20,14 @@ Context สำหรับ Claude session ที่มาทำงานกั�
 | `data.js` | seed `window.REQ_SEED` (snapshot จาก Notion) — ใช้ตอน Supabase ว่างเท่านั้น |
 | `build_seed.py` | แปลง Notion export (`/tmp/req_b*.json`) → `data.js` |
 | `sync_notion.py` | **หัวใจ sync 2 ทาง** Notion ⇄ Supabase (รันโดย GitHub Actions) |
-| `.github/workflows/notion-sync.yml` | cron ทุก 10 นาที + workflow_dispatch |
+| `.github/workflows/notion-sync.yml` | cron ทุก 5 นาที + workflow_dispatch |
 | `supabase/functions/notion-sync/index.ts` | edge function push real-time (ปิดอยู่ `NOTION_SYNC=false` — cron ทำแทน) |
 | `KM.md` | คู่มือสถาปัตยกรรม + decisions + ops |
 
 ## สถาปัตยกรรม
 
 ```
-Notion "Tally requirement"  ──(GitHub Actions cron 10 นาที: sync_notion.py)──▶  Supabase board row id='req'  ◀──▶  index.html (GitHub Pages)
+Notion "Tally requirement"  ──(GitHub Actions cron 5 นาที: sync_notion.py)──▶  Supabase board row id='req'  ◀──▶  index.html (GitHub Pages)
         ▲                                pull: งานใหม่ + descriptive fields
         └───── push: status/priority/dates/note/owner ที่แก้ในบอร์ด ────────────
 ```
@@ -54,5 +54,5 @@ Notion "Tally requirement"  ──(GitHub Actions cron 10 นาที: sync_not
 - Supabase anon key public (รับได้ เหมือน prio-board)
 - concurrency last-write-wins (poll 15 วิ ข้ามตอน drawer เปิด/มี save ค้าง — ลดโอกาสแล้ว)
 - Notion status มีแค่ 5 → บอร์ด 8 collapse ตอน push
-- real-time push ปิด (ใช้ cron 10 นาที); edge function พร้อม deploy ถ้าอยาก instant
+- real-time push ปิด (ใช้ cron 5 นาที); edge function พร้อม deploy ถ้าอยาก instant
 - แก้คอมเมนต์เดิมไม่ได้ (ลบ+เพิ่มใหม่)
