@@ -20,7 +20,7 @@ Context สำหรับ Claude session ที่มาทำงานกั�
 | `data.js` | seed `window.REQ_SEED` (snapshot จาก Notion) — ใช้ตอน Supabase ว่างเท่านั้น |
 | `build_seed.py` | แปลง Notion export (`/tmp/req_b*.json`) → `data.js` |
 | `sync_notion.py` | **หัวใจ sync 2 ทาง** Notion ⇄ Supabase (รันโดย GitHub Actions) |
-| `.github/workflows/notion-sync.yml` | cron ทุก 5 นาที + workflow_dispatch |
+| `.github/workflows/notion-sync.yml` | **loop sync ทุก 5 นาที** (job เดียวรันยาว ~5.5 ชม./รอบ, schedule `*/30` + cancel-in-progress restart ลูปใหม่) — เลี่ยง GitHub ที่ดรอป cron ถี่ๆ |
 | `supabase/functions/notion-sync/index.ts` | edge function push real-time (ปิดอยู่ `NOTION_SYNC=false` — cron ทำแทน) |
 | `KM.md` | คู่มือสถาปัตยกรรม + decisions + ops |
 
@@ -54,5 +54,6 @@ Notion "Tally requirement"  ──(GitHub Actions cron 5 นาที: sync_noti
 - Supabase anon key public (รับได้ เหมือน prio-board)
 - concurrency last-write-wins (poll 15 วิ ข้ามตอน drawer เปิด/มี save ค้าง — ลดโอกาสแล้ว)
 - Notion status มีแค่ 5 → บอร์ด 8 collapse ตอน push
-- real-time push ปิด (ใช้ cron 5 นาที); edge function พร้อม deploy ถ้าอยาก instant
+- real-time push ปิด (ใช้ loop sync 5 นาที); edge function พร้อม deploy ถ้าอยาก instant
+- ⚠️ GitHub ดรอป scheduled cron ถี่ๆ (เจอ gap 1-3 ชม.) → เลยใช้ **long-running loop job** แทน (`*/30` เป็นตัวสตาร์ต/รีสตาร์ต, ลูป sync ทุก 5 นาที). ถ้า GitHub outage > 5.5 ชม. sync จะหยุด → กด Run workflow เอง
 - แก้คอมเมนต์เดิมไม่ได้ (ลบ+เพิ่มใหม่)
