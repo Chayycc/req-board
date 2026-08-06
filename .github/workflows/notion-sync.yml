@@ -1,27 +1,41 @@
 name: Notion ⇄ Board sync
 
-# Every 5 min: pull new/updated requests Notion -> board (descriptive fields),
-# and push board -> Notion (status/priority/dates/note edits, changed items only).
-# See sync_notion.py. Board is authoritative for workflow fields, Notion for descriptive.
+# GitHub's scheduled-cron queue drops/delays short intervals badly (observed 1-3h gaps),
+# so instead of relying on frequent ticks we run ONE long job that loops sync every 5 min
+# for ~5.5h. A periodic schedule (or manual dispatch) starts a fresh loop; cancel-in-progress
+# keeps only the newest loop alive. As long as any trigger lands within 5.5h (gaps are far
+# shorter), coverage is continuous at ~5-min cadence — no external service or token needed.
+# Public repo = unlimited Actions minutes. See sync_notion.py.
 
 on:
   schedule:
-    - cron: "*/5 * * * *"    # every 5 minutes = GitHub Actions' minimum (may still delay under load)
-  workflow_dispatch: {}        # allow manual run from the Actions tab
+    - cron: "*/30 * * * *"   # attempt every 30 min; the running loop bridges any dropped ticks
+  workflow_dispatch: {}       # manual "Run workflow" starts a fresh loop immediately
 
 concurrency:
   group: notion-sync
-  cancel-in-progress: false
+  cancel-in-progress: true    # a new trigger replaces the old loop — exactly one loop alive
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 350      # graceful loop end (330m) sits under this and the 6h hard cap
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Pull Notion → Supabase
+      - name: Sync loop — Notion ⇄ Supabase every 5 min (~5.5h)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-        run: python sync_notion.py
+        run: |
+          end=$((SECONDS + 19800))   # 5.5 hours
+          n=0
+          while :; do
+            n=$((n+1))
+            echo "::group::sync #$n ($(date -u +%H:%M:%S) UTC)"
+            python sync_notion.py || echo "sync #$n failed (continuing)"
+            echo "::endgroup::"
+            [ $SECONDS -ge $end ] && break
+            sleep 300
+          done
