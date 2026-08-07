@@ -6,6 +6,13 @@ name: Notion ⇄ Board sync
 # keeps only the newest loop alive. As long as any trigger lands within 5.5h (gaps are far
 # shorter), coverage is continuous at ~5-min cadence — no external service or token needed.
 # Public repo = unlimited Actions minutes. See sync_notion.py.
+#
+# HARDENING (2026-08-07): the loop step formerly died early (~15 min, job "failure") on some
+# runs while `|| echo` should have kept it alive — the default `set -eo pipefail` shell was
+# terminating the whole job on an unrelated non-zero exit. When that happened AND GitHub then
+# dropped the */30 ticks, coverage gapped for hours (observed ~6h). The step now runs with
+# `set +e`, guards `sleep`, and always `exit 0`, so ONLY cancel-in-progress (the next trigger)
+# ends the loop — never a stray shell error. Individual sync failures are logged, not fatal.
 
 on:
   schedule:
@@ -26,16 +33,26 @@ jobs:
         with:
           python-version: "3.12"
       - name: Sync loop — Notion ⇄ Supabase every 5 min (~5.5h)
+        shell: bash
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
         run: |
-          end=$((SECONDS + 19800))   # 5.5 hours
+          set +e                       # never let a single non-zero command kill the loop/job
+          end=$((SECONDS + 19800))     # 5.5 hours
           n=0
+          fails=0
           while :; do
             n=$((n+1))
             echo "::group::sync #$n ($(date -u +%H:%M:%S) UTC)"
-            python sync_notion.py || echo "sync #$n failed (continuing)"
+            if python sync_notion.py; then
+              fails=0
+            else
+              fails=$((fails+1))
+              echo "sync #$n failed (consecutive=$fails) — continuing"
+            fi
             echo "::endgroup::"
             [ $SECONDS -ge $end ] && break
-            sleep 300
+            sleep 300 || true
           done
+          echo "loop ended cleanly after $n cycles"
+          exit 0                       # job succeeds regardless — cancel-in-progress is the only stopper
